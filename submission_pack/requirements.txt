@@ -1,11 +1,5 @@
-# CPU-ONLY PyTorch. Read the note below before changing this. Similar CPU-only installation is recommended for TensorFlow.
---extra-index-url https://download.pytorch.org/whl/cpu
-
-torch==2.3.1+cpu
-
-numpy>=1.26
-scipy>=1.13
-pandas>=2.2
-scikit-learn>=1.5
-
-
+# Stage B (baseline) uses the Python standard library only.
+# Stage C adds the model stack here, pinned to the training versions, e.g.:
+#   --extra-index-url https://download.pytorch.org/whl/cpu
+#   torch==2.3.1+cpu
+#   numpy==...  pandas==...  scipy==...  h5py==...  astropy==...  requests==...

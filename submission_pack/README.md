@@ -1,130 +1,76 @@
-# Solar Wind Prediction Competition — submission template
+# Syzygy — solar wind speed forecast
 
-This is your starting point. Replace what needs replacing, keep the contract,
-and this README, intact. `README.md` at the zip root is one of three files
-the platform checks for before it will even attempt a build (the others are
-`Dockerfile` and `submission.json`) — so leaving one out fails the build
-before your model ever runs. Once you've read this, replace the prose below
-with a description of your own model; the file just needs to exist.
+Team **Syzygy** (contact: min070118@gmail.com). Track: Operational Podium (all computation in-container).
 
-## The contract
+This version is the **operational baseline**: a persistence → 27-day-recurrence blend computed
+from live ACE/SWEPAM data. The trained Syzygy model (SDO AIA 193 Å + HMI + ACE ensemble) plugs
+into `model_stage.py`; until it does, the baseline is the forecast. The baseline also remains the
+fallback of the full system.
 
-| | |
-|---|---|
-| **Base** | Linux. Anything you can `docker build`. Python is an example, not a requirement. |
-| **Architecture** | `linux/amd64`. The build forces this. |
-| **Entrypoint** | The platform runs `<your ENTRYPOINT> <timestamp>`. The timestamp is **argv[1]**. |
-| **Timestamp** | e.g. `20261111T060000Z` — the cycle time, `t0`. Also available as `$INFERENCE_TIMESTAMP`. |
-| **Forecast** | 72 hourly values, km/s, for `t0+1h … t0+72h`. |
-| **Output** | JSON, POSTed to the one-time URL in `$OUTPUT_POST`. Max 1 MiB. |
-| **Time limit** | 15 minutes wall clock from launch, **including image pull**. |
-| **Resources** | As declared in `submission.json`, up to 8 vCPU / 32 GB / 20 GB usable disk. |
-| **Network** | Any protocol, any public source. 20 GB per run fair use. |
-| **State** | None. Every run starts fresh from the image. |
-| **Success** | Exit code 0 **and** a valid forecast at the upload URL. Either alone is a failure. |
-
-Every one of these is enforced by the platform's infrastructure, not by code
-in this template.  Nothing you edit here can escape any of them, which is exactly why the template is otherwise yours to gut and rebuild.
-
-## Layout
+## Workflow
 
 ```
-submission/
-├── Dockerfile           # edit the marked region
-├── run.sh               # edit the marked line
-├── upload.sh            # provided — or reimplement in your language
-├── submission.json      # required
-├── README.md            # required — this file
-├── requirements.txt     # example — delete if you don't use Python
-├── model.py             # example — replace with anything
-└── local_tests/         # run test_local.sh from here before you submit
-    ├── test_local.sh
-    └── mock_platform.py
+run.sh <t0>
+ └─ predict.py <t0> /tmp/forecast.json        (always exits 0)
+     stage 0  climatology 430 km/s             written immediately
+     stage 1  fetch ACE (t0 - 29 d … t0), cut off at t0, baseline forecast
+     stage 2  model_stage.predict(...)         placeholder in this version
+     each successful stage atomically overwrites /tmp/forecast.json
+ └─ emergency.sh                               writes 72 × 430 km/s only if no valid file exists
+ └─ upload.sh                                  unchanged platform uploader
 ```
 
-Only `Dockerfile`, `submission.json`, and `README.md` are structurally
-required — the platform's upload check looks for exactly those three.
-Everything else is here to make the contract easy to meet:
+* Output: `forecast_speed_kms[k]` is the speed at `t0 + (k+1) h`, k = 0…71. Values are clipped to
+  200–1200 km/s; non-finite values are replaced by 430 km/s. Extra keys `stage` and `info` record
+  which stage produced the forecast.
+* Time budget: 600 s for `predict.py` (watchdog exits 0 with the best forecast written so far),
+  180 s for ACE downloads; per request 20–60 s timeout, 2 retries.
 
-- **`Dockerfile`** — builds your image. The top and bottom (image pull helper,
-  user setup, entrypoint) are load-bearing; the middle is yours to replace
-  with any language or runtime.
-- **`run.sh`** — the entrypoint. One line to edit: whatever command produces
-  your forecast. Everything around it (argument handling, upload call) is
-  plumbing you shouldn't need to touch.
-- **`upload.sh`** — sends your forecast to the platform. Reads `$OUTPUT_POST`
-  (a presigned, one-time S3 upload URL the platform injects per run) and
-  POSTs your output file to it. Reimplement it in your own language if you
-  like; the 1 MiB cap and one-key scope are enforced by S3 regardless of
-  what does the POSTing.
-- **`submission.json`** — declares your team and your resource request (see
-  below). Read once, at build time.
-- **`requirements.txt`** — an example Python dependency list. If you're not
-  using Python, delete it.
-- **`model.py`** — an example model. It returns a flat 420 km/s forecast —
-  a floor, not a baseline. Replace it with anything that honours the
-  contract above.
-- **`local_tests/`** — not required at submission time, but the fastest way
-  to catch a packaging mistake before it costs you a build cycle.
-  `test_local.sh` builds and runs your image exactly as the platform will;
-  `mock_platform.py` stands in for the real presigned-upload endpoint so the
-  upload path actually gets exercised, not skipped. Run it before every
-  submission:
-  ```
-  cd local_tests && bash test_local.sh
-  ```
+## Baseline method
 
-## `submission.json`
-
-```json
-{
-  "team_name": "Team Corona",
-  "contact_email": "lead@example.edu",
-  "cpu_units": 4096,
-  "memory_mib": 16384,
-  "declared_domains": ["services.swpc.noaa.gov", "cdaweb.gsfc.nasa.gov"]
-}
 ```
+v(t0 + k h) = w_k · v_now + (1 − w_k) · v_rec(t0 + k h),   w_k = exp(−k / 48 h)
+  v_now  mean hourly ACE speed over [t0 − 6 h, t0)  (else last valid hour within 48 h)
+  v_rec  mean hourly speed within ±3 h of (t0 + k h − 655 h)   (655 h ≈ 27.2753-day synodic rotation)
+```
+Missing persistence → recurrence only; missing recurrence → persistence only; neither → 430 km/s.
+The 48 h e-folding time was chosen on a backtest over 2026-06 … 2026-11 (512 six-hourly t0s,
+ACE RT hourly truth): MAE 51.0 km/s vs 70.2 (persistence) and 64.1 (recurrence).
 
-`cpu_units` / `memory_mib` must be one of the valid Fargate combinations below. Unsupported combinations are rounded up to the next supported Fargate configuration. 
+## Input data and information cut-off
 
-| `cpu_units` | vCPU | `memory_mib` range | Step |
+| Source | URL | Use | Cut-off rule |
 |---|---|---|---|
-| 1024 | 1 | 2048 – 8192 | 1024 |
-| 2048 | 2 | 4096 – 16384 | 1024 |
-| 4096 | 4 | 8192 – 30720 | 1024 |
-| 8192 | 8 | 16384 – 32768 | 4096 |
+| ACE RT 1-min SWEPAM daily files (NOAA) | `https://sohoftp.nascom.nasa.gov/sdb/goes/ace/daily/YYYYMMDD_ace_swepam_1m.txt` | primary ACE speed, whole 29-day window; status S = 0 only | obs ≤ t0 − 5 min |
+| CDAWeb HAPI `AC_K0_SWE` (Vp, 5-min) | `https://cdaweb.gsfc.nasa.gov/hapi/data?id=AC_K0_SWE&parameters=Vp&…` | fills RT gaps older than 24 h | obs ≤ t0 − 5 min |
+| SWPC RTSW 1-min JSON | `https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json` | fills RT gaps in the last 24 h; `source == "ACE"`, `overall_quality == 0` only | obs ≤ t0 − 5 min |
+| JSOC AIA synoptic / NRT, HMI 1k (model stage) | `https://jsoc1.stanford.edu/data/aia/synoptic[/nrt]/…`, `https://jsoc1.stanford.edu/data/hmi/fits/…` | SDO images for the trained model (not used by the baseline) | obs ≤ slot time and listing mtime + 1 min ≤ t0 |
 
-Note the 4-vCPU tier tops out at **30720 MiB (30 GB), not 32 GB** — "4 cores
-and 32 GB" isn't a real Fargate shape. Requesting it gets you promoted to
-8 vCPU automatically. Your portal page always shows what you were actually
-granted.
+Publication lag assumptions: the ACE real-time stream is published within a few minutes of
+observation, so samples are used only if observed at least 5 minutes before t0. Archives that
+also contain data after t0 (e.g. when t0 is in the past) are cut by observation time. For JSOC
+files the directory listing's modification time is used as the publication time; if it is
+absent, AIA requires obs ≤ t0 − 30 min and HMI obs ≤ t0 − 90 min. HMI file times are TAI and are
+converted to UTC (−37 s).
 
-## Output schema
+Hourly means need ≥ 10 valid 1-min samples (RT, RTSW) or ≥ 3 valid 5-min samples (K0); speeds
+outside 150–2000 km/s are treated as fill. No external forecasts are used.
 
-The platform only reads `forecast_speed_kms`. Everything else in the object
-is yours to use or ignore.
+## Reproducibility
 
-```json
-{
-  "t0": "2026-11-11T06:00:00Z",
-  "valid_from": "2026-11-11T07:00:00Z",
-  "forecast_speed_kms": [418.2, 419.9, "... 72 values total ..."]
-}
+Every download is logged to stdout as a JSON line with URL, fetch time, HTTP status, byte size,
+SHA-256 and the server's `Last-Modified` header, followed by an ACE coverage summary and the stage
+that produced the forecast.
+
+## Dependencies and assets
+
+`public.ecr.aws/docker/library/python:3.11-slim`; the baseline uses the Python standard library
+only (no weights). Runs as non-root user `runner`, writes only to `/tmp`.
+
+## Local test
+
 ```
-
-## Two mistakes worth avoiding up front
-
-**A plain `FROM ubuntu:22.04` or `FROM python:3.11-slim` will eventually hit
-a Docker Hub rate limit** during the build (shared build infrastructure,
-shared outbound IPs). Use the ECR Public Gallery mirrors instead —
-`public.ecr.aws/ubuntu/ubuntu:22.04`, `public.ecr.aws/docker/library/python:3.11-slim` —
-already what this template uses. Browse [gallery.ecr.aws](https://gallery.ecr.aws)
-for others.
-
-**If you use PyTorch, keep the CPU wheel.** Deleting `--extra-index-url
-https://download.pytorch.org/whl/cpu` and `+cpu` from `requirements.txt`
-pulls the CUDA build — about 2.5 GB of NVIDIA libraries onto hardware with
-no GPU. That's 2.3 GB you store in the registry for six months and re-pull
-inside your 15-minute budget on every run. `tensorflow-cpu` has the same
-trap and the same fix.
+cd local_tests && ./test_local.sh 20261111T060000Z
+```
+Failure modes checked locally: no network (`--network none`), missing Python runtime, exhausted
+time budget, malformed t0 — all exit 0 with 72 valid values.

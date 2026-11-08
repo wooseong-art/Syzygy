@@ -1,0 +1,8 @@
+local_tests/
+**/__pycache__/
+**/*.pyc
+**/*.ipynb
+**/.ipynb_checkpoints/
+*.zip
+*.log
+START_HERE.md

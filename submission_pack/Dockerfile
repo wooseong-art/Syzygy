@@ -7,7 +7,7 @@
 # Replace everything between the EDIT markers, including the
 # language and runtime. Keep the ENTRYPOINT contract.
 # ==============================================================
-FROM ubuntu:22.04
+FROM public.ecr.aws/docker/library/python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
@@ -20,17 +20,17 @@ COPY upload.sh /app/upload.sh
 # -------------------------------------------------------------
 
 # ================= EDIT BELOW =================================
-# Install any runtime you like. Python is only an example —
-# R, Julia, Go, a compiled binary are all fine.
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+# Python 3.11 comes from the base image (ECR mirror of python:3.11-slim).
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY model.py .
+COPY syzygy_live/ ./syzygy_live/
+COPY predict.py model_stage.py emergency.sh ./
+RUN chmod +x /app/emergency.sh
+# Model code and weights go here once wired in (stage C):
+# COPY model/ ./model/
 # COPY weights/ ./weights/
 
 # ================= EDIT ABOVE =================================

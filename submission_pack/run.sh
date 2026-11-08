@@ -11,7 +11,7 @@ OUT=/tmp/forecast.json
 #   python3 /app/model.py "$T0" > "$OUT"
 #   Rscript /app/model.R "$T0" "$OUT"
 #   /app/my_binary --t0 "$T0" --out "$OUT"
-python3 /app/model.py "$T0" > "$OUT"
+python3 /app/predict.py "$T0" "$OUT" || true; /app/emergency.sh "$T0" "$OUT"
 # ==============================================================
 
 echo "[run] produced $(wc -c < "$OUT") bytes"

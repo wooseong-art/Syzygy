@@ -1,7 +1,12 @@
 {
-  "team_name": "Team Corona",
-  "contact_email": "lead@example.edu",
+  "team_name": "Syzygy",
+  "contact_email": "min070118@gmail.com",
   "cpu_units": 4096,
   "memory_mib": 16384,
-  "declared_domains": ["services.swpc.noaa.gov", "cdaweb.gsfc.nasa.gov"]
+  "declared_domains": [
+    "sohoftp.nascom.nasa.gov",
+    "cdaweb.gsfc.nasa.gov",
+    "services.swpc.noaa.gov",
+    "jsoc1.stanford.edu"
+  ]
 }

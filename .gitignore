@@ -2,3 +2,5 @@
 kit.zip
 platform.env
 submission_pack/local_tests/out/
+submission_*.zip
+__pycache__/
