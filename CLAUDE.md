@@ -131,7 +131,7 @@ predict.py
 ```
 
 **모델 연결 구조 (팀원 코드는 수정하지 않음)**
-- `model/`: `tools/sync_model.py <git_repo 경로>`가 git_repo에서 **그대로 복사**(같은 상대 경로). import closure + `cr_events`가 import 시 부르는 `external/proswin` 6개 모듈 + Pipeline이 읽는 json/pkl/pt. `model/MANIFEST.json`에 commit·sha256. **모델 코드 변경 시: 스크립트 재실행 → 변경 파일만 표시 → 재빌드.** `tools/`는 이미지에서 제외.
+- `model/`: `tools/sync_model.py <git_repo 경로>`가 git_repo에서 **그대로 복사**(같은 상대 경로). import closure + `cr_events`가 import 시 부르는 `external/proswin` 6개 모듈 + Pipeline이 읽는 json/pkl/pt. `model/MANIFEST.json`에 commit·sha256. **모델 코드 변경 시: 스크립트 재실행 → 변경 파일만 표시 → 재빌드.** `tools/`는 이미지에서 제외. **git에는 `model/MANIFEST.json`만 추적**(`.gitignore`: `submission_pack/model/*`, `!…/MANIFEST.json`) → 새로 클론하면 sync 스크립트로 `model/` 생성 후 빌드.
 - `syzygy_model/runner.py`: 실행 중 패치만 함 — `LIVE_CACHE` → `/tmp/syzygy_cache`, `sw_utils.http_get` → 예외 없음·짧은 timeout·재현성 로그·선다운로드 캐시, `sw_utils.load_ace_hourly` → syzygy_live ACE 주입, `monitor=False`, astropy IERS 자동 다운로드 끔. 영상 slot 22개 + PFSS HMI(최신부터) **병렬 선다운로드**(`SYZYGY_DL_WORKERS`, 기본 12) 동안 Pipeline 로드. 네트워크 마감 = 모델 예산 − `SYZYGY_COMPUTE_RESERVE_S`(150초).
 - `syzygy_model/hourly.py`: **변환 규칙 미정 → `to_hourly()`가 None** (규칙 확정 후 구현). 가드: `ACE_48h` 결측이면 None.
 - 이미지: Python **3.12-slim**, requirements = 팀원 버전 고정(torch 2.4.1+cpu 등).
@@ -173,25 +173,31 @@ predict.py
 
 ## 9. 남은 작업
 
-**단계 B 마무리**
-- [ ] B-7 실제 제출로 `ELIGIBLE` 확보 — **사용자 승인 필요**. 기존 `submit.py`는 conformance 전용(`conformance_pack` + 해시 검사) → `submission_pack`용 복사본 필요. PORTAL은 `.team`.
-- [ ] 변경사항 커밋 (아직 미커밋)
+(2026-11-10 기준. 마감 2026-11-19 23:59:59 UTC까지 9일)
 
-**단계 C (코드·가중치 수령 완료, 2026-11-10 `git_repo`)**
-1. ~~원본 config로 입력 사양 확정~~ → §6에 정리 (`IMG_MATCH_TOL_MIN=180` → 이전 HMI slot 문제 해소)
-2. ~~ACE 주입, 예외 처리, 병렬 다운로드, 시간 예산~~ → `syzygy_model/runner.py` (2026-11-10)
-3. ~~`fc_predict` → `model_stage.predict` 연결~~ → 완료, 로컬 PASS (2026-11-10)
-4. **6h bin → 시간별 72개 변환 규칙** 결정 — **사용자 지시: 규칙 확정 후 진행** (`syzygy_model/hourly.py`)
-5. ~~캐시 없는 상태 실행 시간 실측~~ → 한국 PC 161초(§7). AWS 실측은 실제 제출 로그로 확인. 모델 코드 변경분 수령 시 `tools/sync_model.py`로 반영
-5-1. 과거 t0 테스트 시 영상 공개 시각 필터(누수 방지) 미적용 — 백테스트 전에 runner에 추가 필요
-6. 과거 t0 백테스트: 모델 vs baseline MAE
-7. `requirements.txt` 학습 버전으로 고정, 이미지 크기·실행 시간 측정, CPU/메모리 확정
-8. README 갱신, 최종 제출 (재제출 여유 확보)
+**완료**
+- ~~원본 config·모듈·가중치 수령~~ (`git_repo`, §6) / ~~모델 연결~~ (`syzygy_model/runner.py`, 팀원 코드 무수정) / ~~병렬 선다운로드·ACE 주입·예외 격리·`/tmp`~~ / ~~requirements 고정, Python 3.12-slim~~ / ~~로컬 PASS 161초, 장애 테스트~~ (§7)
+- ~~`model/` gitignore + MANIFEST만 추적~~ (커밋 5f75b00, `docker` 브랜치)
+
+**보류 (사용자 지시)**
+- [ ] **B-7 실제 제출로 `ELIGIBLE` 확보** — 나중에 진행. **사용자 승인 필요**. `submit.py`는 conformance 전용 → `submission_pack`용 복사본 필요. PORTAL은 `.team`.
+- [ ] **시간별 72개 변환 규칙** (`syzygy_model/hourly.py`) — 규칙 확정 후 진행. 확정 전에는 예보 = baseline, 모델 결과는 `info.model`에만 기록.
+- [ ] **모델 코드 변경분 반영** — 팀원 수정본 수령 시 `python tools/sync_model.py <git_repo>` → 변경 파일 확인 → 재빌드 → `test_local.sh`.
+
+**진행 가능 / 다음 작업**
+1. [ ] 나머지 변경사항 커밋 (Dockerfile, predict.py, model_stage.py, requirements.txt, net.py, syzygy_model/, tools/, CLAUDE.md) — 사용자 확인 후
+2. [ ] 과거 t0 테스트용 **영상 공개 시각 필터**(JSOC 목록 mtime ≤ t0) runner에 추가 — 백테스트 전 필수 (실시간 운영에는 영향 없음)
+3. [ ] 변환 규칙 백테스트 준비: 팀원 archive 예측(과거 t0별 `g01_kms`, `router_cf_16bin_kms`, `final_speed_kms`, `v_now_kms`) 수령 → ACE 시간별 정답으로 후보 규칙 MAE 비교 (보간 / baseline 혼합 / Router 16 bin 모양)
+4. [ ] 모델 vs baseline 백테스트 (변환 규칙 적용 후)
+5. [ ] 결정 대기 항목 반영 (§10): PFSS 부분 다운로드 처리, 자원 선언
+6. [ ] README 갱신 (데이터 소스, 공개 지연 LAG, 변환 규칙, fallback 단계)
+7. [ ] 최종 제출 — 재제출 실패 위험 고려해 마감 2–3일 전, 제출 ZIP은 따로 보관 (`model/` 포함)
 
 ## 10. 미확정 / 확인 필요
 
 - ~~원본 `config.py`, 빠진 모듈, 체크포인트~~ → `git_repo`로 수령 (2026-11-10).
-- 팀원에게 추가 요청: ① 11-04 12:00 live 실행의 `features/live_images/*.npy`·`hmi_index.csv`·`forecast_20261104T1200_live.json`·`reports/live_input_check.json`·`inference_check.json` (컨테이너 결과 비트 대조용) ② Router **R0**(PFSS 없음) 가중치 5 seed + meta (PFSS 시간 초과 시 중간 fallback, 사전등록 규칙 밖이라 팀 판단 필요) ③ 시간별 72개 변환 규칙 합의 ④ 실행 Python 버전·패키지 완결성 확인.
+- 팀원에게 추가 요청: ① 11-04 12:00 live 실행의 `features/live_images/*.npy`·`hmi_index.csv`·`forecast_20261104T1200_live.json`·`reports/live_input_check.json`·`inference_check.json` (컨테이너 결과 비트 대조용) ② **archive 예측**(과거 t0별 g01·router 16 bin·final·v_now, 변환 규칙 백테스트용) ③ 시간별 72개 변환 규칙 합의 ④ 모델 코드 수정 예정분 ⑤ (선택) Router **R0** 가중치 — 로컬 실측상 PFSS 시간 문제 작아 우선순위 낮음.
+- 사용자 결정 대기: ① Python **3.12-slim** 사용 확인 (§2 템플릿은 3.11, 팀원 개발 3.12.3) ② PFSS용 HMI 부분 다운로드 시 그대로 계산(현재) vs 일정 비율 미만이면 G01 fallback ③ 자원 4 vCPU / 16 GB 유지(권장, 실측 최대 1.08 GB) vs 축소.
 - `forecast[k]`와 ACE 시간 라벨의 정확한 대응(t0+(k+1)h가 시간 시작인지 끝인지) — 주최측 확인.
 - 품질 플래그 처리 방식, live 시작일 (주최측 공지 대기).
 - 최종 Participation Terms 전문 (6.2–6.8절).
