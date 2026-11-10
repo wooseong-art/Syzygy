@@ -1,6 +1,6 @@
 # Benchlab Solar Wind Prediction — Docker 제출 작업 브리프
 
-> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-08.
+> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-10.
 > 출처: starter-kit 레포(`wooseong-art/Syzygy`, branch `starter-kit`), Slack `#benchlab-support-and-q`, 주최측 공지 PDF(2026-11-03), 엔드포인트 실측(2026-11-08).
 
 ## 0. 목표와 마감
@@ -77,25 +77,44 @@
 - JSOC 디렉터리 목록에 파일별 수정 시각(분 단위, UTC)이 표시됨 → 공개 시각으로 사용.
 - 최신 시각 확인: `…/synoptic/nrt/image_times`, `…/hmi/fits/latest_fits_time`.
 
-## 6. 모델 코드 분석 (`syzygy_code/`, 브랜치 `wooseong-art-Syzygy_code`에서 가져옴)
+## 6. 모델 코드 (`wooseong-art/git_repo`, main, 2026-11-10 분석)
 
-**구성**: 추론 진입점 `fc_predict.py`(`predict(t0, {"mode":"live"})`), 모델 정의 `fc_model.py`(RegimeNetCF), 데이터 수집·전처리 `sw_utils.py`, 피처 `build_features.py`/`04b_ch_features.py`, PFSS `04f`/`04m`/`pfss.py`/`pfss_trace.py`, `common.py`. **학습 코드는 없음**(추론에 불필요).
+**출처**: `https://github.com/wooseong-art/git_repo` (커밋 1333bb2, 447 파일, 80 MB). 이전 `syzygy_code/`(브랜치 `wooseong-art-Syzygy_code`)는 config가 플레어 프로젝트 파일이고 모듈·가중치가 빠져 있었음 → **이 레포로 대체**. 추론 진입점 `code/experiments/syzygy_final_cme_free_2026/fc_predict.py`(`predict(t0, {"mode":"live", ...})`).
 
-**앙상블**: G01(4×3 격자, 기본·fallback), P2o, O(HSS 점유), T2(onset), RegimeNetCF(영상+ACE), Router(MoE, masked AIA+PFSS). 최종 = `final_selection.json`의 base(A/B/C/D) + 보정. **CME(DONKI) 미사용**.
+**받은 것 (이전 "실행 불가 요인" 모두 해소)**
+- 원본 `code/config.py`(태양풍용, `BASE_DIR` = `SW_BASE_DIR` 또는 레포 루트). import closure 정적 확인 → 빠진 로컬 모듈 없음. 외부 `proswin`/`hss_prediction`은 lazy import라 추론에 불필요.
+- 가중치 30개(G01·RegimeNetCF·RouterR2·O ×5 seed, 출력만 하는 P2o·T2 ×5): 원래 위치 + `final_bundle/weights/`. 설정 `final_selection.json`, `ensemble_meta_valid.json`, `preds_info.json`, `model_preds_info.json`, `boxcox_maps_A/C.pkl`.
+- `ch_pfss.h5` `feat_fs` 상수 → `final_bundle/final_params.py`·`configs/pipeline_params.json` (h5 없으면 코드가 자동 사용). `IMAGE_INDEX_CSV` 없으면 live 캐시만 사용(이미 수정됨).
+- `requirements.txt`(추론용, 개발 Python **3.12.3**): torch 2.4.1(+cpu), numpy 2.2.0, pandas 2.2.3, h5py 3.16.0, scipy 1.15.2, astropy 7.1.0, sunpy 7.1.2, requests 2.32.5, tqdm 4.67.1.
+
+**최종 모델 `C+HBC0.25`** (`final_bundle/README.md`)
+```
+v       = 0.5·mean_seed(G01) + 0.5·mean_seed(Router R2)
+Router_s = denorm(anchor_s + Σ softmax(router_s)·ΔV_s)   (anchor·ΔV = 같은 seed RegimeNetCF)
+v_final = v + 0.25·p_occ·(BoxCox_C(v) − v),  p_occ = mean_seed(sigmoid(O occ_logits))[bins 3,7,11,15]
+fallback: 영상·PFSS 입력 하나라도 없으면 v = G01, 보정 boxcox_maps_A
+```
+- 성능(RMSE km/s, 4 horizon): 최종 valid 63.98 / test(탐색) 65.57, G01 67.69 / 67.00. test 이득 −1.4(CI 0 포함). CME(DONKI) 미사용.
 
 **입력**
-- ACE 시간별 V, [t0 − 29일, t0). 파생: hist 48h, persist 24h, v_now(6h 평균), rec(t0−28d~−22d 6h bin 24개), v27, recur. 정규화 `(V − 430) / 100`, 결측 0 + mask.
-- AIA 193 + HMI, slot = t0 − 12k h (k = 0…10), 없으면 slot − 6h. RegimeNet 0/24/48/72/96h × 2채널(128²), CH 특징 0–96h 12h 간격, 격자 G 0/24/48/72h, Router masked AIA(t0).
-- PFSS(`router_variant == "fs"`일 때): 최근 28일 HMI 6h 간격(최대 약 112장) → 15분 내 가능 여부 실측 필요. `br` 변형은 live 미구현 → fallback.
+- ACE 시간별 V, [t0 − 696h, t0). 정규화 `(V − 430) / 100`, 결측 0 + mask.
+- AIA 193 + HMI, slot = t0 − 12k h (k = 0…10, 22장). slot 이전 **3시간**(`IMG_MATCH_TOL_MIN=180`) 안 가장 가까운 정상 영상, 없으면 slot − 6h(`IMG_FILL_TOL_HOURS`). 전처리 256² → 128². G01은 격자 G(0/24/48/72h), RegimeNet 0–96h 24h 간격, CH 특징 12h 간격, Router masked AIA(t0).
+- PFSS f_s(R2): [T − 28일, T − 2h] HMI 6h 간격 → Carrington 지도 → l ≤ 20 → CH 자기력선 추적 → f_s 5분위.
+- 인과성: 영상 obs ≤ slot, PFSS HMI obs ≤ T − 2h, ACE hour < t0. **공개 시각은 보지 않음** + 확정본 우선 → 실시간은 괜찮지만 과거 t0 백테스트는 누수.
 
-**출력 불일치**: 모델은 t0를 6h 격자로 내린 뒤 **h = 24/48/72/96의 6h 평균 4개**(+ RegimeNet/Router 16 bin)를 냄 → **시간별 72개로 변환 규칙 필요**.
+**출력 불일치**: t0를 6h 격자로 내린 뒤 **h = 24/48/72/96의 ACE 6h 평균 [t0+h−6, t0+h) 4개**(Router/RegimeNet은 16 bin) → **시간별 72개 변환 규칙 필요**.
 
-**실행 불가 요인 (팀원에게 요청 중)**
-1. `config.py`가 **플레어 프로젝트 파일**(`E:\flare_data`, SHARP). 코드가 쓰는 `C.*` 117개 중 113개 없음. 원본은 `D:\syzygy\code\config.py`. 정규화·전처리·모델 구조 값은 추측 금지.
-2. 빠진 모듈: `model.py`, `train.py`, `run_phase.py`, `cr_train.py`, `fc_common.py`, `oc_common.py`, `oc_predict.py`, `oc_calibrate.py`, `oc_onset.py`, `monitoring/logger`.
-3. 체크포인트(seed별 G01/P2o/O/T2/RegimeNetCF/Router), `final_selection.json`, `ensemble_meta_valid.json`, `preds_info.json`, `boxcox_*.pkl`, `ch_pfss.h5` `feat_fs` 정규화 attrs, `IMAGE_INDEX_CSV`.
+**팀원 측 검증**: archive ↔ live 입력 과거 4시각 비트 일치, 예보 차 ≤ 0.01 km/s, 모델 계산 0.07초, live 1회(2026-11-04 12:00) 상태 OK. **단, 캐시 빈 상태에서 입력 준비 5,466초**(한국에서 JSOC 103건 순차, 101장).
 
-**`sw_utils.py`를 Docker에 쓸 때 고칠 점**: `http_get`이 예외를 던지고 호출부가 안 잡음(→ exit 1 위험) / 공개 지연 없음(`not_after = T`) / 확정본 우선이라 과거 t0 테스트에서 누수 / 재현성 로그 없음 / timeout 300초, 순차 다운로드 / 실시간에서 L2 요청 낭비 / config import 시 Windows 경로 `mkdir`, 캐시를 코드 폴더에 씀(→ `/tmp`, `monitor=False`).
+**Docker에 쓸 때 고칠 점**
+1. **영상 다운로드 시간 (최대 위험)**: stateless라 매 실행 FITS 약 130장(영상 22 + PFSS HMI 약 107, 약 150 MB) + 디렉터리 목록 수십 건. 병렬화 + 예산 초과 시 PFSS 생략 → G01 fallback 필수. AWS에서 실측 필요.
+2. ACE: `sw_utils.load_ace_hourly`는 L2 HAPI → L2 CDAS → K0 순, timeout 300초(L2는 2024 중단) → `syzygy_live.ace` 결과 주입(`live_inputs`의 `ace_source` 분기 활용).
+3. `http_get`이 재시도 후 예외 → `predict()` 전체 중단. 별도 프로세스/try로 격리.
+4. 쓰기: `LIVE_CACHE` = 코드 폴더 `features/live_images`, `monitor=True` 기본(monitoring/, predictions/) → `/tmp`로, `monitor=False`.
+5. 과거 t0 테스트 누수 → `syzygy_live.sdo`(목록 mtime 기준)로 후보 필터.
+6. astropy IERS 자동 다운로드 가능성(미선언 도메인) → 컨테이너에서 확인, 필요 시 `auto_download=False`.
+7. 베이스 이미지 Python 3.12-slim으로 맞추는 것 검토(개발 3.12.3).
+8. 실시간 ACE(RT) vs 학습(L2/K0) 차이 bias +2.4 km/s, G01 RMSE +0.7–1.2 (감수 가능).
 
 ## 7. 현재 구현 (`submission_pack/`, 단계 B 완료)
 
@@ -143,19 +162,20 @@ predict.py
 - [ ] B-7 실제 제출로 `ELIGIBLE` 확보 — **사용자 승인 필요**. 기존 `submit.py`는 conformance 전용(`conformance_pack` + 해시 검사) → `submission_pack`용 복사본 필요. PORTAL은 `.team`.
 - [ ] 변경사항 커밋 (아직 미커밋)
 
-**단계 C (원본 config·모듈·가중치 수령 후)**
-1. 원본 config로 입력 사양 확정 (변수, 창 길이, 정규화, 전처리, `IMG_MATCH_TOL_MIN`)
-2. `sw_utils` 보완 또는 `syzygy_live`로 대체: LAG, 예외 처리, 실시간 L2 생략, 병렬 다운로드
-3. `fc_predict` → `model_stage.predict` 연결: 경로 `/tmp`, `monitor=False`, Windows 경로 제거
+**단계 C (코드·가중치 수령 완료, 2026-11-10 `git_repo`)**
+1. ~~원본 config로 입력 사양 확정~~ → §6에 정리 (`IMG_MATCH_TOL_MIN=180` → 이전 HMI slot 문제 해소)
+2. `sw_utils` 보완 또는 `syzygy_live`로 대체: ACE 주입, 예외 처리, 병렬 다운로드, 시간 예산
+3. `fc_predict` → `model_stage.predict` 연결: 경로 `/tmp`, `monitor=False`
 4. **6h bin → 시간별 72개 변환 규칙** 결정
-5. PFSS 사용 여부(`router_variant`), 15분 내 실행 실측
+5. **캐시 없는 상태 실행 시간 실측**(AWS 기준) → PFSS(R2) 유지 여부, 단계적 fallback(R2 → (R0) → G01 → baseline → 기후값)
 6. 과거 t0 백테스트: 모델 vs baseline MAE
 7. `requirements.txt` 학습 버전으로 고정, 이미지 크기·실행 시간 측정, CPU/메모리 확정
 8. README 갱신, 최종 제출 (재제출 여유 확보)
 
 ## 10. 미확정 / 확인 필요
 
-- 원본 `config.py`, 빠진 모듈, 체크포인트 (팀원 요청 중).
+- ~~원본 `config.py`, 빠진 모듈, 체크포인트~~ → `git_repo`로 수령 (2026-11-10).
+- 팀원에게 추가 요청: ① 11-04 12:00 live 실행의 `features/live_images/*.npy`·`hmi_index.csv`·`forecast_20261104T1200_live.json`·`reports/live_input_check.json`·`inference_check.json` (컨테이너 결과 비트 대조용) ② Router **R0**(PFSS 없음) 가중치 5 seed + meta (PFSS 시간 초과 시 중간 fallback, 사전등록 규칙 밖이라 팀 판단 필요) ③ 시간별 72개 변환 규칙 합의 ④ 실행 Python 버전·패키지 완결성 확인.
 - `forecast[k]`와 ACE 시간 라벨의 정확한 대응(t0+(k+1)h가 시간 시작인지 끝인지) — 주최측 확인.
 - 품질 플래그 처리 방식, live 시작일 (주최측 공지 대기).
 - 최종 Participation Terms 전문 (6.2–6.8절).
