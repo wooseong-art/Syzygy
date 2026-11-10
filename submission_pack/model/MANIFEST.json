@@ -1,0 +1,466 @@
+{
+ "source": "https://github.com/wooseong-art/git_repo",
+ "commit": "1333bb2895f03588fe5f3c226fefe4f98caf3ee4",
+ "files": [
+  {
+   "path": "code/04b_ch_features.py",
+   "bytes": 4093,
+   "sha256": "e9e2434c38d430eebf3a3b79f06ae42cdf4d76439c13438ec918e5ce97cebd61"
+  },
+  {
+   "path": "code/04f_pfss_maps.py",
+   "bytes": 8858,
+   "sha256": "6fb1af2dcefc6cea3e9cedd8fb6134c7352b7fd59ab23b153c82d965560cff51"
+  },
+  {
+   "path": "code/04m_ch_pfss.py",
+   "bytes": 20015,
+   "sha256": "dd9aa66610b04a26e25ee5f6afd5045eb519b8bd522d8f17fa68bea65945e7bd"
+  },
+  {
+   "path": "code/05_train.py",
+   "bytes": 107020,
+   "sha256": "8b857c06917b6ee4fe279bf031864ca87ffacad019db087a03cdf15cadeacc2d"
+  },
+  {
+   "path": "code/config.py",
+   "bytes": 34882,
+   "sha256": "1affd86c938645ebc6d57eab1e41e796c77d63265d2281f39e26e5a24bed46c2"
+  },
+  {
+   "path": "code/eval_utils.py",
+   "bytes": 6281,
+   "sha256": "16315aa033aec493625ad8e54f6c63d282c8379f0a45625fcd37d64bf0878586"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/cr_boxcox.py",
+   "bytes": 5154,
+   "sha256": "4eef50a02cdadc902a05097b196131f919f57f1ef7f653ae752a727ba10a59d5"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/cr_common.py",
+   "bytes": 6300,
+   "sha256": "12486c2c6fc4d1e5cad0f8f9ec03c4204d7f810923d8ab83b0a7901978e41ddd"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/cr_events.py",
+   "bytes": 16400,
+   "sha256": "d0419667aa82038980089df7f1f8a18ecbc37069b280b5b007c89217f4932d71"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/cr_train.py",
+   "bytes": 8456,
+   "sha256": "3ed89fe29adddc076257071645ef2dc27cb21ae27e92f2e04fcce582cf6da34b"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/run_phase.py",
+   "bytes": 32910,
+   "sha256": "21e9f16a01a53dd80ca7b252cef45a071974e92803065ba9ae4d877696a90ddd"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_calibrate.py",
+   "bytes": 9388,
+   "sha256": "78e4a6295b2b7e1866267c91098f7ee0269ab8bd18bd30a5429d1df05ee09291"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_common.py",
+   "bytes": 1949,
+   "sha256": "f6f22df780ac94e117394992163027682f5f28217a271a64043a8f9bcb71bb9b"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_evalcore.py",
+   "bytes": 16933,
+   "sha256": "d1c45cd5716a88c386c025fa291c621f5a1f4f8ab4ff2a53c0f037fbcb32d781"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_labels.py",
+   "bytes": 6896,
+   "sha256": "44d9d89297b3da3e17afad799e19e515521359cf6342f4023ca45e5efab3aaee"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_model.py",
+   "bytes": 2569,
+   "sha256": "6769f577c6b407004607ace43f210f043992a506821dfeed4f0d65db2da2cacb"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_onset.py",
+   "bytes": 4117,
+   "sha256": "7667220c912e44e616b607aa934c7461decc6b5c5092504fc46ef04754326a58"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_predict.py",
+   "bytes": 4588,
+   "sha256": "d59aa3948fcaba0b01369c249ec7137813189ea5efc173b3bed59b4e896c3a98"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_prereg.py",
+   "bytes": 6826,
+   "sha256": "14cce29f588d52cc16b48feeef75c1ae67d74da5bc1e81a4217939ef0b7e1fb5"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_protocol_compare.py",
+   "bytes": 5053,
+   "sha256": "652ae7f6b388f6d48d198a750339b940b30dc022c4447b2af6aa4e5621c90e52"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_protocols.py",
+   "bytes": 19190,
+   "sha256": "cbc17ddd27b0fb702b68c6627314dd6e0c730cf43a228a56e2880bf88a697ee6"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/oc_train.py",
+   "bytes": 17696,
+   "sha256": "3db4123850ea94cdabc189b0ceb550ddf06363b78475ea12438789fb2f2522d2"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/ablation_model.py",
+   "bytes": 5483,
+   "sha256": "b82fc116dd92af6a05471a2af81156b340d128ece91dd0183ed8b60602bdd299"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/build_features.py",
+   "bytes": 21875,
+   "sha256": "9ec0783b47497b022d0f46e9ef383ff821e4a797efb06701d2ba78abe2f43792"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/common.py",
+   "bytes": 6380,
+   "sha256": "ad31c007ba046f3395f83f009e9738c5c60c1e8af95d3f6405bbee38998031df"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/monitoring/__init__.py",
+   "bytes": 123,
+   "sha256": "5a491b21ccf4d3d65043c66806df3bd06fd4df91c7a173204f48be5415bb9931"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/monitoring/logger.py",
+   "bytes": 10431,
+   "sha256": "58eea58f61fc97ff7a02b6160d737c1caa1e781b658d1b073f8105128aaf711b"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/train.py",
+   "bytes": 12989,
+   "sha256": "9a68fe033b63ce57f2df0ea15e59c26d74a98e9b58cf115ceb32631ed3206b58"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/fc_common.py",
+   "bytes": 4067,
+   "sha256": "ec772da67cad1b9f66dcdb1fec8304a1aca2af6c0b1ae3cf84d9d59d8049819f"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/fc_model.py",
+   "bytes": 5249,
+   "sha256": "f1f0bf2a62ed1264269a81709180e439d2a541ef4943df9dffe81f39f2f9b471"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/fc_predict.py",
+   "bytes": 28354,
+   "sha256": "405f7324ae5256b5f06005f7042e2b30feae8f299ba1eb571657d4323e3b4b11"
+  },
+  {
+   "path": "code/model.py",
+   "bytes": 56361,
+   "sha256": "d0b8b7bbeb9207cc293a3f2b7078a7e7cb349d1b141dd348337d5bb99aee28a5"
+  },
+  {
+   "path": "code/pfss.py",
+   "bytes": 4809,
+   "sha256": "adad3e31690f492e442f66e3bfe8f24d831f2d389ba0bfe0d2a7b82535f8dd35"
+  },
+  {
+   "path": "code/pfss_trace.py",
+   "bytes": 16030,
+   "sha256": "8e549ff072ebd35474a20491705d2120c18b28585881009bca44de78c9ccbdd0"
+  },
+  {
+   "path": "code/sw_utils.py",
+   "bytes": 56305,
+   "sha256": "87d2d30145e1a57fb2af32c8124a33c39aa912f8520114356c8fd8b1e62cddb1"
+  },
+  {
+   "path": "external/proswin/src/proswin/__init__.py",
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "path": "external/proswin/src/proswin/data_management/__init__.py",
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "path": "external/proswin/src/proswin/data_management/event_builder.py",
+   "bytes": 11377,
+   "sha256": "3bf68656fca7b06dbf10724fa53407e1e077a7cb3c27ccc1052d1ed0b6a3c715"
+  },
+  {
+   "path": "external/proswin/src/proswin/evaluation/__init__.py",
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "path": "external/proswin/src/proswin/evaluation/hss_finder.py",
+   "bytes": 21791,
+   "sha256": "ade2ed3823f8590ea7bc80dd5bf5d8eb13ba0d09c70bd0d4d283f0e40e64d46d"
+  },
+  {
+   "path": "external/proswin/src/proswin/evaluation/solar_wind_prediction_evaluator.py",
+   "bytes": 19250,
+   "sha256": "55a124c06b5940eec0a5bca6a4af4077856979d3f7364f7c749e99f038e0fa15"
+  },
+  {
+   "path": "external/proswin/src/proswin/model/__init__.py",
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "path": "external/proswin/src/proswin/model/losses.py",
+   "bytes": 2495,
+   "sha256": "c2e08d6142755bcf93ed946fa2912c6885fc493b1412b882ed9100f6fc53ef3e"
+  },
+  {
+   "path": "external/proswin/src/proswin/predictions.py",
+   "bytes": 17482,
+   "sha256": "a092bc792411dcccb91386915301c064f351c6b11baa207e0769544265b6dd20"
+  },
+  {
+   "path": "external/proswin/src/proswin/utils/__init__.py",
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "path": "external/proswin/src/proswin/utils/interpolation_dates.py",
+   "bytes": 10626,
+   "sha256": "9557d65a289605e436bb9c5164bc138b7314a8200e9ea1865c7cb086fd7bb668"
+  },
+  {
+   "path": "external/proswin/LICENSE",
+   "bytes": 1091,
+   "sha256": "0b7669a6a7738c7d0766487268f92b657d699f3c8aa30c34808194883d4257b1"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/configs/final_selection.json",
+   "bytes": 16300,
+   "sha256": "cc50a023975dd3ffdf5ff1773f7c98b22616fb0cb61ba2ca80d12e676f19bdd9"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/metrics/ensemble_meta_valid.json",
+   "bytes": 10171,
+   "sha256": "a88ac06d186b2b76ad431defe317d951636eabc18022eef942fc5be1ec82416c"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/preregistration.json",
+   "bytes": 8802,
+   "sha256": "b2d9d08e2be2e1976b4af18eac5010e4ca575f2ade03851e8f3a734af005023c"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/final_bundle/final_params.py",
+   "bytes": 11679,
+   "sha256": "87b2519dc53409b571fcb75cddaa7e88099709753fea28bcfebda8610941b8ea"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/predictions/preds_info.json",
+   "bytes": 22742,
+   "sha256": "506eee6edc5a298b66cca807fbb9a1544481b27f0664669b8281bde5f99dc137"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/predictions/model_preds_info.json",
+   "bytes": 6461,
+   "sha256": "1ae83e51995ebb91eba4d38894efa48d3c6bbb2c734b65691806321864f12fb7"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/configs/boxcox_maps_A.pkl",
+   "bytes": 644,
+   "sha256": "3d869423cd4fb9f3b2a01f5b7fb22abf076091dfe703701153528417cbe0eab6"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/configs/boxcox_maps_B.pkl",
+   "bytes": 644,
+   "sha256": "6ba7dc717e029499a5a417fff7a284c916d58465245de2317a7418bc817ff673"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/configs/boxcox_maps_C.pkl",
+   "bytes": 644,
+   "sha256": "f549312068f4989b1dcec8d3f024e0d6648939e65cb7682b9239fcae1037be25"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/configs/boxcox_maps_D.pkl",
+   "bytes": 644,
+   "sha256": "b698f94630a0494442e38aaeff7e85c3e2830e1d6ebed5cbe37be7b7e56e79ba"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/regime/regime_cf_s42.pt",
+   "bytes": 2847662,
+   "sha256": "0dd514d368c8a953b3b4bb613b2b0e618455f31c9c99361d02a8de3a7e0b8d24"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/meta_router_R2_s42.json",
+   "bytes": 2361,
+   "sha256": "62b64ca9c830535521935af4ac70e01af176b9422e31c82af35017877f4a58db"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/router_R2_s42.pt",
+   "bytes": 2804902,
+   "sha256": "f5b112487a4fa77b53736fc4136c62205f0b069c40854f9b8ce7621f65bf2131"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/checkpoints/20261025T224657Z-E001_S1-seed42/best.pt",
+   "bytes": 526934,
+   "sha256": "1709d8c8cd2a57f1c258546d61f28bc85c8b902234668faff3b095a1c3c57665"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/checkpoints/P2o_4x3_E001_seed42/best.pt",
+   "bytes": 526614,
+   "sha256": "dff37cede2032b6d5335f4853c0ffb8a1d383142e4b18a58eeee5c2cde0c4942"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/O_seed42/best.pt",
+   "bytes": 533462,
+   "sha256": "859e00d2ddc49ff936957a71baa09527ceb71740e73f824f756f6ba115be6ba4"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/GRID_T2_lam0.1_beta0.0_seed42/best.pt",
+   "bytes": 536842,
+   "sha256": "2b5646c26bdf0ea98fa4d13e2051a3c83f6d382ab16b564ac56275c8ab55a9d2"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/regime/regime_cf_s43.pt",
+   "bytes": 2847662,
+   "sha256": "580b81d3be279c2e4a3e8bb56af6e60615839ac5955b901293f156eefc41aa8f"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/meta_router_R2_s43.json",
+   "bytes": 2355,
+   "sha256": "54cde5836c3cb534cd0ea8b0d4c27cb3d3478e5edf54de7f37d50d8883f3e676"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/router_R2_s43.pt",
+   "bytes": 2804902,
+   "sha256": "45aaa098a2d3559fe2f263f767468c1d25b31d3808c029f88e7f7e13a9e9497e"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/checkpoints/20261026T064316Z-E001_S1-seed43/best.pt",
+   "bytes": 526934,
+   "sha256": "26e51db2b133fabda83c2171f1108cc78b33912d21c7e16476e94d34adb4ac80"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/checkpoints/P2o_4x3_E001_seed43/best.pt",
+   "bytes": 526614,
+   "sha256": "038ea5ef014a1966daeaa5db8cc64a4e4437b3469983f4ce9743329f62f253bf"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/O_seed43/best.pt",
+   "bytes": 533462,
+   "sha256": "a12ec0ee2125064df38b82cd620add2168f7c0b4217a02576db6513829579804"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/T2_seed43/best.pt",
+   "bytes": 536842,
+   "sha256": "e3f1a995672b20ed94e0d9ab65c2da07fba64d64ad3622faae4f332cd61f0e95"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/regime/regime_cf_s44.pt",
+   "bytes": 2847662,
+   "sha256": "f0a46a8158b6f3e5e6c8e3ce9ba9dcec8a19d537690705f9bd01f2e2549ae65e"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/meta_router_R2_s44.json",
+   "bytes": 2352,
+   "sha256": "874367d75a394fdeb6f0af671b7f39a6f164ff0f931951a3fab3b93962378fe0"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/router_R2_s44.pt",
+   "bytes": 2804902,
+   "sha256": "7811d6af587d63291e1a943f91be22ad9b99d4fe1ac92bb991e863d839c61c0a"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/checkpoints/20261026T064638Z-E001_S1-seed44/best.pt",
+   "bytes": 526934,
+   "sha256": "a16902c91b365146761841b6543531941a717149e94c2c64dea1a4e9b2dd838b"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/checkpoints/P2o_4x3_E001_seed44/best.pt",
+   "bytes": 526614,
+   "sha256": "fac68a12d6323c6272f531d027f432017eec6bfd191f2ddc12bcc6e7d7b145d8"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/O_seed44/best.pt",
+   "bytes": 533462,
+   "sha256": "4a3c73a458498b61663257bd71eeb39435fdc3a24fcb099e4853ed25fbd4d9af"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/T2_seed44/best.pt",
+   "bytes": 536842,
+   "sha256": "17f80691f318083e8d453e3e1d6d389c1ea33906d9cc9e71bc614a5e9317a41d"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/regime/regime_cf_s45.pt",
+   "bytes": 2847662,
+   "sha256": "60d260b3f8c35a40eb0b61a91d09f11eb0e0fc007d758d556aea4cbbc849ef4d"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/meta_router_R2_s45.json",
+   "bytes": 2358,
+   "sha256": "a691e556d8d95ac137fe936570bd5b1f968a26df929a3ba597a3019820f5d04e"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/router_R2_s45.pt",
+   "bytes": 2804902,
+   "sha256": "4d079529dbbb171853d485001e3ac9b955c98213892e8910c7f4792d86ff91a5"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/checkpoints/20261026T064952Z-E001_S1-seed45/best.pt",
+   "bytes": 526934,
+   "sha256": "bbd3e4fa32cb995aef0d539c51cce8121bbecfd673bbab206b0bb261e1ac5d3b"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/checkpoints/P2o_4x3_E001_seed45/best.pt",
+   "bytes": 526614,
+   "sha256": "1245893a16a14b86079bf62ffaec161b71b58eb7b24700a5243c8245f7898ed9"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/O_seed45/best.pt",
+   "bytes": 533462,
+   "sha256": "cc8a6a1d73ab188884aa43e7d2d5e0c6dbc541554f6b56ad3dfd562cde8c86f8"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/T2_seed45/best.pt",
+   "bytes": 536842,
+   "sha256": "28564af005477d562595d257e4c28d2a60775a6be6b950be4f88e97f20d29ea7"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/regime/regime_cf_s46.pt",
+   "bytes": 2847662,
+   "sha256": "2f01ed3f1a82f108b810acf293d2151b31b0c3a9bb44dbbafb2a8639462e9d86"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/meta_router_R2_s46.json",
+   "bytes": 2359,
+   "sha256": "92e573762efb3513959b1eedde0f40ecf88742b56c4b8cb669d98608805488e3"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/checkpoints/router/router_R2_s46.pt",
+   "bytes": 2804902,
+   "sha256": "25c3612bc43cb4f28864227553307458795116d97352cc868846257916472cfa"
+  },
+  {
+   "path": "code/experiments/physical_factorial_ablation/checkpoints/20261026T065314Z-E001_S1-seed46/best.pt",
+   "bytes": 526934,
+   "sha256": "e244d49fdba1e2a7b916cb80bf2e51cbea7611e86080cd98f7cefd3ffbbe235a"
+  },
+  {
+   "path": "code/experiments/collin_hss_reference/checkpoints/P2o_4x3_E001_seed46/best.pt",
+   "bytes": 526614,
+   "sha256": "1cdccb46df0adb42728368d790a6d805802ae0e70614132005cdaa9047e46ad8"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/O_seed46/best.pt",
+   "bytes": 533462,
+   "sha256": "49b29cd8c3c4307901770cfb64aa28d580305df7cc5576898863ebd4447cafbb"
+  },
+  {
+   "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/T2_seed46/best.pt",
+   "bytes": 536842,
+   "sha256": "44dbe84d32bd43b16bf5a2e1a31cabf19c22990c102184c49035509123463895"
+  }
+ ]
+}

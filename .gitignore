@@ -4,3 +4,7 @@ platform.env
 submission_pack/local_tests/out/
 submission_*.zip
 __pycache__/
+
+# team model copied from wooseong-art/git_repo by submission_pack/tools/sync_model.py (only the manifest is tracked)
+submission_pack/model/*
+!submission_pack/model/MANIFEST.json
