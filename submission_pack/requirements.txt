@@ -1,5 +1,12 @@
-# Stage B (baseline) uses the Python standard library only.
-# Stage C adds the model stack here, pinned to the training versions, e.g.:
-#   --extra-index-url https://download.pytorch.org/whl/cpu
-#   torch==2.3.1+cpu
-#   numpy==...  pandas==...  scipy==...  h5py==...  astropy==...  requests==...
+# Model stack, pinned to the team's development environment (git_repo requirements.txt, Python 3.12.3).
+# syzygy_live/ (ACE + baseline) still uses only the standard library.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.4.1+cpu
+numpy==2.2.0
+pandas==2.2.3
+h5py==3.16.0
+scipy==1.15.2
+astropy==7.1.0
+sunpy==7.1.2
+requests==2.32.5
+tqdm==4.67.1

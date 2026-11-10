@@ -108,6 +108,7 @@ fallback: 영상·PFSS 입력 하나라도 없으면 v = G01, 보정 boxcox_maps
 
 **Docker에 쓸 때 고칠 점**
 1. **영상 다운로드 시간 (최대 위험)**: stateless라 매 실행 FITS 약 130장(영상 22 + PFSS HMI 약 107, 약 150 MB) + 디렉터리 목록 수십 건. 병렬화 + 예산 초과 시 PFSS 생략 → G01 fallback 필수. AWS에서 실측 필요.
+   - 실측(2026-11-10, 한국 PC → JSOC): 디렉터리 목록 0.4–1.0초, HMI 1.04 MB 순차 1.5–3.7초/장(약 0.3 MB/s), **8 병렬 24장 17.2초**(합계 약 1.4 MB/s), AIA NRT 1.2 MB 9.2초(1장). → 130장 추정 순차 약 7–10분 / 8 병렬 약 1.5–2분. 5,466초는 다운로드 자체보다 재시도·timeout·순차 목록 탐색 영향으로 추정.
 2. ACE: `sw_utils.load_ace_hourly`는 L2 HAPI → L2 CDAS → K0 순, timeout 300초(L2는 2024 중단) → `syzygy_live.ace` 결과 주입(`live_inputs`의 `ace_source` 분기 활용).
 3. `http_get`이 재시도 후 예외 → `predict()` 전체 중단. 별도 프로세스/try로 격리.
 4. 쓰기: `LIVE_CACHE` = 코드 폴더 `features/live_images`, `monitor=True` 기본(monitoring/, predictions/) → `/tmp`로, `monitor=False`.
@@ -116,7 +117,7 @@ fallback: 영상·PFSS 입력 하나라도 없으면 v = G01, 보정 boxcox_maps
 7. 베이스 이미지 Python 3.12-slim으로 맞추는 것 검토(개발 3.12.3).
 8. 실시간 ACE(RT) vs 학습(L2/K0) 차이 bias +2.4 km/s, G01 RMSE +0.7–1.2 (감수 가능).
 
-## 7. 현재 구현 (`submission_pack/`, 단계 B 완료)
+## 7. 현재 구현 (`submission_pack/`, 단계 B 완료 + 단계 C 모델 연결 2026-11-10)
 
 ```
 run.sh <t0>  →  python3 /app/predict.py "$T0" "$OUT" || true; /app/emergency.sh "$T0" "$OUT"  →  upload.sh
@@ -124,9 +125,16 @@ predict.py
  ├─ ⓪ 기후값 430 × 72 즉시 저장
  ├─ watchdog (SYZYGY_BUDGET_S, 기본 600초) → os._exit(0)
  ├─ ① ace.load_ace_hourly(t0) (예산 180초) → baseline.forecast → 저장
- ├─ ② model_stage.predict(t0, ace_hourly, deadline) → 저장   ← 단계 C에서 구현 (MODEL_AVAILABLE=False)
+ ├─ ② model_stage.predict(t0, ace_hourly, deadline, ace_source) → 자식 프로세스 `python3 -m syzygy_model.runner`
+ │     → (72개 | None, info). 72개면 stage "model"로 저장, None이면 baseline 유지 + info.model에 모델 결과 기록
  └─ 각 저장은 원자적(os.replace). sanitize: 72개 아니면 폐기, NaN→430, clip 200–1200
 ```
+
+**모델 연결 구조 (팀원 코드는 수정하지 않음)**
+- `model/`: `tools/sync_model.py <git_repo 경로>`가 git_repo에서 **그대로 복사**(같은 상대 경로). import closure + `cr_events`가 import 시 부르는 `external/proswin` 6개 모듈 + Pipeline이 읽는 json/pkl/pt. `model/MANIFEST.json`에 commit·sha256. **모델 코드 변경 시: 스크립트 재실행 → 변경 파일만 표시 → 재빌드.** `tools/`는 이미지에서 제외.
+- `syzygy_model/runner.py`: 실행 중 패치만 함 — `LIVE_CACHE` → `/tmp/syzygy_cache`, `sw_utils.http_get` → 예외 없음·짧은 timeout·재현성 로그·선다운로드 캐시, `sw_utils.load_ace_hourly` → syzygy_live ACE 주입, `monitor=False`, astropy IERS 자동 다운로드 끔. 영상 slot 22개 + PFSS HMI(최신부터) **병렬 선다운로드**(`SYZYGY_DL_WORKERS`, 기본 12) 동안 Pipeline 로드. 네트워크 마감 = 모델 예산 − `SYZYGY_COMPUTE_RESERVE_S`(150초).
+- `syzygy_model/hourly.py`: **변환 규칙 미정 → `to_hourly()`가 None** (규칙 확정 후 구현). 가드: `ACE_48h` 결측이면 None.
+- 이미지: Python **3.12-slim**, requirements = 팀원 버전 고정(torch 2.4.1+cpu 등).
 
 | 파일 | 역할 |
 |---|---|
@@ -139,7 +147,7 @@ predict.py
 | `emergency.sh` | 유효 파일이 없을 때만 430 × 72 작성 |
 
 - `syzygy_live/`는 **표준 라이브러리만** 사용 → 모델 스택이 깨져도 baseline 동작.
-- `requirements.txt`는 현재 비어 있음(주석만). `submission.json`: Syzygy / min070118@gmail.com / 4096 / 16384 / 도메인 4개(sohoftp, cdaweb, services.swpc, jsoc1).
+- `requirements.txt`: 팀원 개발 버전 고정(2026-11-10). `submission.json`: Syzygy / min070118@gmail.com / 4096 / 16384 / 도메인 4개(sohoftp, cdaweb, services.swpc, jsoc1).
 - 예제 `model.py` 삭제. 제출 ZIP: `Syzygy/submission_B.zip` (`.gitignore`에 `submission_*.zip`).
 
 **검증 결과 (2026-11-08)**
@@ -148,6 +156,13 @@ predict.py
 - Baseline 백테스트(2026-06~11, t0 512개, ACE RT 정답): MAE persistence 70.2 / 재귀 64.1 / τ=24h 52.2 / **τ=48h 51.0** / τ=96h 55.1 km/s.
 - 장애 테스트 모두 exit 0 + 72개: `--network none`(기후값), Python 없음(emergency), 예산 2초(watchdog), 잘못된 t0.
 - SDO: 실시간·과거 t0 모두 미공개 파일 제외 확인. **HMI는 t0 slot에서 못 찾음**(nrt 지연 약 50분 > 허용 ±60분 경계) → 단계 C에서 허용 오차 결정.
+
+**검증 결과 — 모델 연결 (2026-11-10, 한국 PC, t0 = 2026-11-10 06:00)**
+- 이미지 **1,949 MiB**(pull 약 20초). `test_local.sh` **PASS, runtime 161초**. 컨테이너 메모리 최대 **1.08 GB**.
+- 모델 state **OK**, 결측 입력 없음, `C+HBC0.25` = 627.8 / 556.8 / 492.1 / 462.3 km/s (h = 24/48/72/96). 실행마다 동일.
+- 선다운로드 FITS 123장(128 MB), 영상 22/22, PFSS HMI 101/102(1 slot JSOC에 없음). 시간: 8 workers 90초 / 12 workers 108초 / 16 workers 57초(JSOC 상태 따라 변동). 선다운로드 후 추가 요청 0건. predict(전처리 + PFSS + 30개 망) 24–35초, Pipeline 로드 0.4초.
+- 접속 호스트: jsoc1, sohoftp(필요 시 cdaweb, services.swpc) → 선언 4개 안. astropy/sunpy 다운로드 흔적 없음(`/home/runner`에 캐시 파일 없음). 오류는 확정본 AIA 폴더 404(정상)뿐.
+- 장애: `--network none` → exit 0, 72개(baseline 단계), 모델은 FALLBACK_G01(ACE_48h·영상 결측). `SYZYGY_BUDGET_S=200` → 영상 일부만 받고 FALLBACK_G01, exit 0.
 
 ## 8. 테스트 방법
 
@@ -164,10 +179,11 @@ predict.py
 
 **단계 C (코드·가중치 수령 완료, 2026-11-10 `git_repo`)**
 1. ~~원본 config로 입력 사양 확정~~ → §6에 정리 (`IMG_MATCH_TOL_MIN=180` → 이전 HMI slot 문제 해소)
-2. `sw_utils` 보완 또는 `syzygy_live`로 대체: ACE 주입, 예외 처리, 병렬 다운로드, 시간 예산
-3. `fc_predict` → `model_stage.predict` 연결: 경로 `/tmp`, `monitor=False`
-4. **6h bin → 시간별 72개 변환 규칙** 결정
-5. **캐시 없는 상태 실행 시간 실측**(AWS 기준) → PFSS(R2) 유지 여부, 단계적 fallback(R2 → (R0) → G01 → baseline → 기후값)
+2. ~~ACE 주입, 예외 처리, 병렬 다운로드, 시간 예산~~ → `syzygy_model/runner.py` (2026-11-10)
+3. ~~`fc_predict` → `model_stage.predict` 연결~~ → 완료, 로컬 PASS (2026-11-10)
+4. **6h bin → 시간별 72개 변환 규칙** 결정 — **사용자 지시: 규칙 확정 후 진행** (`syzygy_model/hourly.py`)
+5. ~~캐시 없는 상태 실행 시간 실측~~ → 한국 PC 161초(§7). AWS 실측은 실제 제출 로그로 확인. 모델 코드 변경분 수령 시 `tools/sync_model.py`로 반영
+5-1. 과거 t0 테스트 시 영상 공개 시각 필터(누수 방지) 미적용 — 백테스트 전에 runner에 추가 필요
 6. 과거 t0 백테스트: 모델 vs baseline MAE
 7. `requirements.txt` 학습 버전으로 고정, 이미지 크기·실행 시간 측정, CPU/메모리 확정
 8. README 갱신, 최종 제출 (재제출 여유 확보)

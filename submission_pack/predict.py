@@ -85,29 +85,33 @@ def main(argv):
     timer.start()
 
     # stage 1: baseline from ACE
-    ace_hourly = {}
+    ace_hourly, ace_source = {}, {}
+    best = ([CLIMATOLOGY_KMS] * H, "climatology", {})
     try:
         from syzygy_live import ace, baseline
         net.set_deadline(t_start + ACE_FETCH_S)
-        ace_hourly, _ = ace.load_ace_hourly(t0)
+        ace_hourly, ace_source = ace.load_ace_hourly(t0)
         vals, info = baseline.forecast(ace_hourly, t0)
         vals = sanitize(vals)
         if vals:
-            write_forecast(out, t0_str, valid_from, vals, "baseline", info)
+            best = (vals, "baseline", info)
+            write_forecast(out, t0_str, valid_from, *best)
     except Exception:
         net.log("stage_failed", stage="baseline", error=traceback.format_exc()[-1500:])
 
-    # stage 2: model
+    # stage 2: model (child process; its output is kept in info.model even when not used for the forecast)
     try:
         import model_stage
         if model_stage.MODEL_AVAILABLE:
             deadline = t_start + BUDGET_S - 30
-            net.set_deadline(deadline - 15)
-            vals = sanitize(model_stage.predict(t0, ace_hourly, deadline))
+            raw, minfo = model_stage.predict(t0, ace_hourly, deadline, ace_source)
+            vals = sanitize(raw) if raw is not None else None
             if vals:
-                write_forecast(out, t0_str, valid_from, vals, "model")
+                write_forecast(out, t0_str, valid_from, vals, "model", {"model": minfo, "fallback": best[2]})
             else:
-                net.log("stage_skipped", stage="model", reason="no usable output")
+                net.log("stage_skipped", stage="model", reason="no hourly output (rule undecided or model failed)")
+                if minfo:
+                    write_forecast(out, t0_str, valid_from, best[0], best[1], {**best[2], "model": minfo})
         else:
             net.log("stage_skipped", stage="model", reason="model not wired in yet")
     except Exception:

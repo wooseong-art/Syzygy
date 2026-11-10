@@ -6,6 +6,7 @@ status, size, sha256 and the server's Last-Modified header.
 import hashlib
 import json
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -19,9 +20,14 @@ def utcnow_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
+_log_lock = threading.Lock()
+
+
 def log(event, **fields):
-    print(json.dumps({"event": event, "at": utcnow_iso(), **fields}, ensure_ascii=False, default=str),
-          file=sys.stdout, flush=True)
+    line = json.dumps({"event": event, "at": utcnow_iso(), **fields}, ensure_ascii=False, default=str) + "\n"
+    with _log_lock:                                  # one write per line: download threads must not interleave
+        sys.stdout.write(line)
+        sys.stdout.flush()
 
 
 def set_deadline(monotonic_deadline):

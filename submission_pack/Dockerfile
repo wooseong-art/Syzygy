@@ -7,7 +7,7 @@
 # Replace everything between the EDIT markers, including the
 # language and runtime. Keep the ENTRYPOINT contract.
 # ==============================================================
-FROM public.ecr.aws/docker/library/python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
@@ -20,18 +20,19 @@ COPY upload.sh /app/upload.sh
 # -------------------------------------------------------------
 
 # ================= EDIT BELOW =================================
-# Python 3.11 comes from the base image (ECR mirror of python:3.11-slim).
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+# Python 3.12 from the base image (ECR mirror of python:3.12-slim) — the model was developed on 3.12.3.
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
+    OMP_NUM_THREADS=4 MPLCONFIGDIR=/tmp/mpl
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Team model: code + weights copied unchanged from git_repo by tools/sync_model.py (see model/MANIFEST.json)
+COPY model/ ./model/
 COPY syzygy_live/ ./syzygy_live/
+COPY syzygy_model/ ./syzygy_model/
 COPY predict.py model_stage.py emergency.sh ./
 RUN chmod +x /app/emergency.sh
-# Model code and weights go here once wired in (stage C):
-# COPY model/ ./model/
-# COPY weights/ ./weights/
 
 # ================= EDIT ABOVE =================================
 

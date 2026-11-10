@@ -6,3 +6,4 @@ local_tests/
 *.zip
 *.log
 START_HERE.md
+tools/
