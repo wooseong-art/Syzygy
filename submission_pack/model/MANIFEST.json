@@ -1,6 +1,6 @@
 {
  "source": "https://github.com/wooseong-art/git_repo",
- "commit": "1333bb2895f03588fe5f3c226fefe4f98caf3ee4",
+ "commit": "5a7dffaf8b1446aa0b51e563b4d65bfa3461a755",
  "files": [
   {
    "path": "code/04b_ch_features.py",
@@ -154,8 +154,8 @@
   },
   {
    "path": "code/experiments/syzygy_final_cme_free_2026/fc_predict.py",
-   "bytes": 28354,
-   "sha256": "405f7324ae5256b5f06005f7042e2b30feae8f299ba1eb571657d4323e3b4b11"
+   "bytes": 33909,
+   "sha256": "edd9a74125b5078bed505fe540244cf80d6083443d12d82ac10d13c667545abf"
   },
   {
    "path": "code/model.py",
