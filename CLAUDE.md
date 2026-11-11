@@ -7,7 +7,9 @@
 
 - 이미 학습된 태양풍 속도 예측 모델을 **Benchlab 제출용 Docker 이미지**로 패키징한다.
 - 트랙: **Operational Podium (100% in-container)** — 상금($20k) 대상. 외부 연산 금지.
-- **코드 프리즈: 2026-11-19 23:59:59 UTC (= KST 11-20 08:59)**. 그 전에 실제 제출이 dry run을 통과해 `ELIGIBLE` 상태여야 함.
+- **코드 프리즈: 2026-11-19 23:59:59 UTC (= KST 11-20 08:59)**. 그 전에 실제 제출이 dry run을 통과해 `ELIGIBLE` 상태여야 함. 프리즈 뒤에는 이미지 고정(코드 수정·재학습·수동 개입 불가), 입력 데이터만 매 실행 새로 받음.
+- **현황 (2026-11-12)**: 첫 실제 제출이 **`ELIGIBLE` 달성**(dry run t0 = 11-11 16:00 UTC, §7). 이후 수정본(`bf45c55`) 재제출 → 결과 확인 필요(§9).
+- 점수는 dry run에서 나오지 않음(자격 검사만). live 평가 시작 후 리더보드에서 확인. **live 시작일 미공지**(프리즈 이후로 추정, Slack 확인 필요).
 - 재제출하면 이전 ELIGIBLE 버전이 대체됨 → 새 버전이 실패하면 자격을 잃을 수 있음. 마감 직전 무리한 변경 금지.
 
 ## 1. 실행 계약 (플랫폼이 강제)
@@ -147,7 +149,7 @@ predict.py
 
 **모델 연결 구조 (팀원 코드는 수정하지 않음)**
 - `model/`: `tools/sync_model.py <git_repo 경로>`가 git_repo에서 **그대로 복사**(같은 상대 경로). import closure + `cr_events`가 import 시 부르는 `external/proswin` 6개 모듈 + Pipeline이 읽는 json/pkl/pt. `model/MANIFEST.json`에 commit·sha256. **모델 코드 변경 시: 스크립트 재실행 → 변경 파일만 표시 → 재빌드.** `tools/`는 이미지에서 제외. **git에는 `model/MANIFEST.json`만 추적**(`.gitignore`: `submission_pack/model/*`, `!…/MANIFEST.json`) → 새로 클론하면 sync 스크립트로 `model/` 생성 후 빌드.
-- `syzygy_model/runner.py`: 실행 중 패치만 함 — `LIVE_CACHE` → `/tmp/syzygy_cache`, `sw_utils.http_get` → 예외 없음·짧은 timeout·재현성 로그·선다운로드 캐시, `sw_utils.load_ace_hourly` → syzygy_live ACE 주입, `monitor=False`, astropy IERS 자동 다운로드 끔, **`sw_utils.list_dir` → 공개 시각 컷오프 필터**(아래). 영상 slot 22개 + PFSS HMI(최신부터) **병렬 선다운로드**(`SYZYGY_DL_WORKERS`, 기본 12) 동안 Pipeline 로드. 네트워크 마감 = 모델 예산 − `SYZYGY_COMPUTE_RESERVE_S`(150초).
+- `syzygy_model/runner.py`: 실행 중 패치만 함 — `LIVE_CACHE` → `/tmp/syzygy_cache`, `sw_utils.http_get` → 예외 없음·짧은 timeout·재현성 로그·선다운로드 캐시, `sw_utils.load_ace_hourly` → syzygy_live ACE 주입, `monitor=False`, astropy IERS 자동 다운로드 끔, **`sw_utils.list_dir` → 공개 시각 컷오프 필터**(아래). 영상 slot 22개 + PFSS HMI(최신부터) **병렬 선다운로드**(`SYZYGY_DL_WORKERS`, 기본 **6** — 12는 AWS에서 JSOC 503 유발) 동안 Pipeline 로드. 선다운로드 slot 기준은 모델과 같은 **`ts = floor(t0, 6h)`**(t0는 정각이 아닐 수 있음). 503/429는 2·4·6·8초 backoff로 최대 4회 재시도, 실패한 목록은 빈 목록으로 캐시하지 않음. 네트워크 마감 = 모델 예산 − `SYZYGY_COMPUTE_RESERVE_S`(150초).
 - **공개 시각 컷오프 필터** (`runner.list_dir`, 2026-11-12): JSOC 목록의 수정 시각을 공개 시각으로 봄. NRT 파일은 `mtime + 1분 ≤ t0`만 사용(mtime 없으면 obs ≤ t0 − 30분 AIA / 90분 HMI). 확정본은 `mtime + 1분 ≤ t0` 또는 obs ≤ t0 − 60분(AIA) / 180분(HMI) — 같은 관측이 NRT로 이미 공개됐던 것으로 간주(확정본이 생기면 HMI NRT는 삭제되므로 재실행 재현용). 숨긴 파일 수는 `cutoff_filter` 로그.
 - `syzygy_model/hourly.py`: 팀원 `hourly_speed_kms`(96개)에서 **72개 선택만** 함(값은 안 바꿈). **`LABEL_SHIFT_H = 1` → `hourly[1:73]`**: SWPC `ace_swepam_1h.json`의 `time_tag`가 **시간의 시작**이라(2026-11-11 실측: 15:40 UTC에 최신 행 14:00, 1분 자료 대비 MAE 시작 7.4 vs 끝 13.1 km/s) "t0+k h" 정답 구간은 [t0+k, t0+k+1) = 팀원 k+1번째. 주최측이 "끝 시각 라벨"이라고 하면 0으로. baseline도 같은 시작 라벨 규칙. 가드: `ACE_48h` 결측이면 None(baseline 유지).
 - 이미지: Python **3.12-slim**, requirements = 팀원 버전 고정(torch 2.4.1+cpu 등).
@@ -167,7 +169,7 @@ predict.py
 
 - `syzygy_live/`는 **표준 라이브러리만** 사용 → 모델 스택이 깨져도 baseline 동작.
 - `requirements.txt`: 팀원 개발 버전 고정(2026-11-10). `submission.json`: Syzygy / min070118@gmail.com / 4096 / 16384 / 도메인 4개(sohoftp, cdaweb, services.swpc, jsoc1).
-- 예제 `model.py` 삭제. 제출 ZIP: `Syzygy/submission_B.zip`(baseline 버전), **`Syzygy/submission_C.zip`(모델 버전, 2026-11-12 생성, 115 파일 36.0 MB, `model/` 포함, 미제출)** — `.gitignore`에 `submission_*.zip`.
+- 예제 `model.py` 삭제. 제출 ZIP은 `submit_real.py`가 `Syzygy/submission_real.zip`으로 매번 새로 만듦(115 파일 36.0 MB, `model/` 포함). `.gitignore`에 `submission_*.zip`, `submission_logs/`.
 
 **검증 결과 (2026-11-08)**
 - `test_local.sh` PASS: 템플릿 원본(1606 MiB) / 우리 버전(197 MiB, 실행 9초).
@@ -192,27 +194,38 @@ predict.py
 - 컷오프 필터: t0 12:00을 15:50에 실행 → 목록 4개에서 223개 파일 숨김, 최신 사용 영상 AIA 11:45 / HMI nrt 11:00 (필터 전에는 t0 이후 공개된 AIA 11:57 등을 받았음 → 최종값 489.0 → 488.1로 소폭 변화). 과거 t0(11-08 06:00)도 state OK.
 - 장애: `--network none` → baseline 72개(모델은 ACE_48h 결측으로 hourly 거부), `SYZYGY_BUDGET_S=200` → stage model(G01 fallback + KI), `SYZYGY_BUDGET_S=2` → watchdog, 기후값. 모두 exit 0.
 
+**검증 결과 — Benchlab 실제 제출 dry run (2026-11-11 16:00 UTC = KST 11-12 01:00, 첫 제출본)**
+- 포털: `REGISTERED` → `BUILDING`(약 5분) → **`ELIGIBLE`**. 자원 4096 / 16384 부여 확인. `recent_runs`: `cycle_ts 20261111T160000Z`, SUCCESS, exit 0, **pull 18초 + run 86초**, output 12,167 bytes.
+- **dry run t0는 6h 격자가 아니었음(16:00)** → 모델은 영상 slot 12:00 사용(`issue_cadence` 1h 경로). live t0가 정각인지는 미확인.
+- 실행 로그: 기후값 → baseline(528.9…494.0) → **model(523.5…421.7)**, state OK, `C+HBC0.25` = 496.3 / 452.0 / 424.5 / 405.0, 결측 없음. ACE 693/696h. 우리 프로세스 62.6초(선다운로드 13.3초, predict 44초). **AWS에서 JSOC FITS 1장 중앙값 0.07초**(한국 약 5초).
+- 발견한 문제 2개(값에는 영향 없었음): ① 12 병렬이 너무 빨라 **JSOC 503 90건**(재시도로 필요한 파일은 모두 받음) ② 선다운로드가 t0(16:00) 기준 slot을 받아 11장 낭비 + 모델이 13장을 순차로 다시 받음(추가 요청 24건).
+- **수정(`bf45c55`)**: workers 6, 503 backoff, 선다운로드 기준 `floor(t0, 6h)`. 로컬 확인: t0 16:00 → FITS 123장, 선다운로드 후 추가 요청 0건, 값이 dry run과 일치(496.2 / 452.0 / 424.5 / 405.0); t0 12:00 OK; `test_local.sh`(t0 18:00) PASS 84초. 한국에서 선다운로드 37–40초.
+
 ## 8. 테스트 방법
 
 - 로컬 테스트: `cd submission_pack/local_tests && bash test_local.sh <t0>`.
   - **Windows 주의**: `python3`가 Microsoft Store 바로가기라 mock 서버가 안 뜸 → `exec python "$@"`인 `python3` shim을 만들어 PATH 앞에 둘 것. PATH에는 `/c/...` 형식 사용(`C:/...`는 콜론 때문에 깨짐).
 - 장애 테스트: `docker run --rm --network none --entrypoint bash swp-local -c "python3 /app/predict.py <t0> /tmp/f.json; …"`, `-e SYZYGY_BUDGET_S=2`, `PATH=/usr/bin:/bin`(Python 없음).
 - 과거 t0 여러 개로 컷오프 누수 확인. HMI nrt는 4–5일 뒤 삭제되므로 오래된 t0는 영상 재현 불가.
+- **실제 제출·상태 확인 (`submit_real.py`, 프로젝트 루트)**: `check`(기본, 검사 + `submission_real.zip` 생성, 업로드 없음) / `status` / `watch [분]`(60초 간격, 변화만 출력) / `logs`(`submission_logs/`에 빌드·실행 로그 저장, gitignore) / `submit --yes`(ZIP을 다시 만들어 업로드, **현재 제출을 대체**). 포털은 웹 화면 없이 `.team`의 `PORTAL` 링크가 JSON을 반환(비밀 링크). 볼 항목: `eligibility`, `failure_reason`, `cpu_granted`/`memory_granted`, `recent_runs[]`(status, exit_code, pull_seconds, run_seconds, output_bytes), `logs[]`(링크 1시간 유효). 업로드 제한 500 MB(우리 ZIP 36 MB). 올라간 forecast 파일은 포털에서 못 받음 → 로그의 `forecast_written`·`model_done`으로 확인.
+- 실행 로그 분석 포인트: 최종 `forecast_written` stage가 `model`인지, `predict_done`의 state·missing, `prefetch_done` 결과·시간, `fetch_error`의 503 건수, 접속 호스트가 선언 4개 안인지.
 
 ## 9. 남은 작업
 
-(2026-11-12 기준. 마감 2026-11-19 23:59:59 UTC = KST 11-20 08:59까지 약 8일)
+(2026-11-12 기준. 마감 2026-11-19 23:59:59 UTC = KST 11-20 08:59까지 약 8일. 마지막 제출은 재제출 여유를 두고 KST 11-17경까지)
 
 **완료**
-- ~~모델 수령·연결·병렬 선다운로드·ACE 주입·예외 격리~~ (§7) / ~~`model/` gitignore + MANIFEST 추적~~ / ~~`5a7dffa`·`909af51` 반영~~
-- ~~시간별 72개 변환~~ (팀원 KI 규칙, `hourly.py`) / ~~영상 공개 시각 컷오프 필터~~ / ~~제출 README 갱신~~ / ~~`submission_C.zip` 생성(미제출)~~ / ~~로컬 PASS + 장애 테스트~~
+- ~~모델 수령·연결~~ / ~~`5a7dffa`·`909af51` 반영~~ / ~~72개 변환(KI)~~ / ~~공개 시각 컷오프 필터~~ / ~~제출 README~~ / ~~`submit_real.py`~~
+- ~~**실제 제출 → `ELIGIBLE`**~~ (2026-11-12 KST, 사용자가 `submit --yes` 실행, dry run 104초)
+- ~~dry run에서 나온 문제 수정~~ (`bf45c55`: workers 6, 503 backoff, 선다운로드 slot 기준)
 
-**다음 작업 (순서대로)**
-1. [ ] 변경사항 커밋 (README.md, model/MANIFEST.json, model_stage.py, predict.py, syzygy_model/hourly.py, runner.py, CLAUDE.md) — 사용자 확인 후
-2. [ ] **실제 제출로 `ELIGIBLE` 확보** — **사용자 승인 필요(현재 제출 금지 지시)**. `submit.py`는 conformance 전용 → `submission_pack`용 복사본 필요. PORTAL은 `.team`. 제출 후 dry run 로그로 AWS 실행 시간·접속 호스트 확인. 재제출 실패 위험 때문에 마감 2–3일 전(11-17 KST경)까지 권장.
-3. [ ] (선택) **KI vs baseline vs 혼합 백테스트** — 최근 30일 과거 t0를 컨테이너로 돌려 ACE 정답과 시간별 MAE 비교(1회 약 1분, 4–5일 이전은 HMI NRT 삭제로 확정본 사용). 앞쪽 1–12h에서 baseline 혼합이 나은지 확인. 팀원 archive 예측을 받으면 더 빠름.
-4. [ ] §10 결정 대기 항목 반영 (라벨 규칙, PFSS 부분 다운로드, 자원 선언)
-5. [ ] 모델 코드가 또 바뀌면: `python tools/sync_model.py <git_repo>` → 변경 파일 확인 → 재빌드 → `test_local.sh` → ZIP 재생성
+**진행 중 / 다음 작업**
+1. [ ] **재제출(`bf45c55`) 결과 확인** — 2026-11-12 KST 조회 시 `BUILDING`. `ELIGIBLE` 복귀 + 실행 로그에서 503이 사라졌는지, 선다운로드 후 추가 요청 0건인지 확인. 실패 시 이전 커밋(`826ed43` 상태)으로 되돌려 재제출.
+2. [ ] **주최측(Slack) 문의**: live 시작일 / live t0가 00·06·12·18 정각인지 / 예보 시각 t0+k가 정답 `time_tag`와 그대로 대응하는지(`LABEL_SHIFT_H`).
+3. [ ] **과거 t0 백테스트** (권장, 프리즈 전 유일한 성능 확인 수단): 최근 30일 t0 약 100개를 컨테이너로 실행(1회 약 1분) → ACE 실측과 시간별 MAE/RMSE. 비교: KI vs baseline(τ=48h, MAE 51.0) vs 지속 예보 vs 앞쪽 시간 baseline 혼합. 4–5일 이전 t0는 HMI NRT가 삭제돼 확정본 사용(컷오프 필터의 확정본 LAG 규칙 적용).
+4. [ ] §10 결정 대기 항목 반영 후 필요 시 최종 재제출 (라벨 규칙, baseline 혼합 여부, PFSS 부분 다운로드, 자원 선언)
+5. [ ] 모델 코드가 또 바뀌면: `python tools/sync_model.py <git_repo>` → 변경 파일 확인 → 재빌드 → `test_local.sh` → `submit_real.py check`
+6. [ ] `ELIGIBLE` 확정 버전의 ZIP 보관 (`submission_real.zip`은 실행할 때마다 덮어씀. 기존 `submission_B/C.zip`·`kit.zip`은 사용자가 삭제함 — 제출 버전은 git 커밋으로 재현 가능)
 
 ## 10. 미확정 / 확인 필요
 
@@ -222,6 +235,6 @@ predict.py
 - 팀원에게 추가 요청: ① 11-04 12:00 live 실행의 `features/live_images/*.npy`·`hmi_index.csv`·`forecast_20261104T1200_live.json`·`reports/live_input_check.json`·`inference_check.json` (컨테이너 결과 비트 대조용) ② **archive 예측**(과거 t0별 g01·router 16 bin·final·v_now, 변환 규칙 백테스트용) ③ ~~시간별 72개 변환 규칙~~(해결) ④ 추가 수정 예정분(H96 채택 여부 포함 — 채택 시 코드·가중치 필요) ⑤ (선택) Router **R0** 가중치 — 로컬 실측상 PFSS 시간 문제 작아 우선순위 낮음.
 - 사용자 결정 대기: ① Python **3.12-slim** 사용 확인 (§2 템플릿은 3.11, 팀원 개발 3.12.3) ② PFSS용 HMI 부분 다운로드 시 그대로 계산(현재) vs 일정 비율 미만이면 G01 fallback ③ 자원 4 vCPU / 16 GB 유지(권장, 실측 최대 1.08 GB) vs 축소.
 - `forecast[k]`와 ACE 시간 라벨의 정확한 대응 — SWPC `time_tag`는 시작 시각으로 실측 확인(2026-11-11). Benchlab이 forecast 시각을 `time_tag`에 그대로 맞추는지는 주최측 확인 필요.
-- 품질 플래그 처리 방식, live 시작일 (주최측 공지 대기).
+- 품질 플래그 처리 방식, **live 시작일**(문서·웹 검색으로 확인 안 됨, 주최측 공지 대기), live t0 격자(dry run은 16:00이었음).
 - 최종 Participation Terms 전문 (6.2–6.8절).
 - ~~conformance 완료 여부~~ → **완료** (커밋 0534dfd). ~~팀명~~ → `Syzygy` (`.team`).
