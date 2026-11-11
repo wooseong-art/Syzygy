@@ -15,8 +15,8 @@ Runtime patches (fc_predict.py and sw_utils.py stay byte-identical to git_repo):
   4. predict(..., monitor=False) → no writes to monitoring/ or predictions/
   5. astropy IERS auto-download off (would contact an undeclared host)
   6. sw_utils.list_dir          → hides JSOC files not yet published at t0 (listing mtime), see list_dir()
-Prefetch: the candidate FITS for every image slot (t0 − 12k h, k = 0…10, AIA 193 + HMI) and the PFSS
-HMI history ([t0 − 28 d, t0 − 2 h], newest first) are downloaded in parallel while the 30 networks load.
+Prefetch: the candidate FITS for every image slot (ts − 12k h, k = 0…10, ts = floor(t0, 6 h), AIA 193 + HMI)
+and the PFSS HMI history ([ts − 28 d, ts − 2 h], newest first) are downloaded in parallel while the 30 networks load.
 fc_predict then runs exactly as written; its own sequential requests hit the in-memory cache.
 """
 import json
@@ -33,7 +33,7 @@ from pathlib import Path
 APP = Path(__file__).resolve().parents[1]
 EXP = APP / "model" / "code" / "experiments" / "syzygy_final_cme_free_2026"
 CACHE = Path(os.environ.get("SYZYGY_CACHE", "/tmp/syzygy_cache"))
-WORKERS = int(os.environ.get("SYZYGY_DL_WORKERS", "12"))
+WORKERS = int(os.environ.get("SYZYGY_DL_WORKERS", "6"))   # 12 made JSOC answer 503 from AWS (dry run 2026-11-11)
 HTTP_TIMEOUT_S = float(os.environ.get("SYZYGY_HTTP_TIMEOUT_S", "40"))
 COMPUTE_RESERVE_S = float(os.environ.get("SYZYGY_COMPUTE_RESERVE_S", "150"))   # kept for preprocessing + PFSS + nets
 
@@ -54,7 +54,10 @@ def log(event, **kw):
         sys.stdout.flush()
 
 
-def _fetch(url, retries=2, headers=None):
+_failed = set()            # urls that failed for a reason other than 404 (so a listing is not cached as empty)
+
+
+def _fetch(url, retries=4, headers=None):
     import requests
     import sw_utils as U
     for attempt in range(retries + 1):
@@ -68,14 +71,21 @@ def _fetch(url, retries=2, headers=None):
             if r.status_code == 404:
                 log("fetch_error", url=url, status=404)
                 return None
-            r.raise_for_status()
-            log("fetch", url=url, status=r.status_code, bytes=len(r.content), sha256=sha256(r.content).hexdigest(),
-                last_modified=r.headers.get("Last-Modified"), elapsed_s=round(time.monotonic() - t, 2))
-            return r
+            if r.status_code in (429, 503):          # JSOC throttling: back off longer than for other errors
+                log("fetch_error", url=url, status=r.status_code, attempt=attempt)
+                wait = 2.0 * (attempt + 1)
+            else:
+                r.raise_for_status()
+                log("fetch", url=url, status=r.status_code, bytes=len(r.content), sha256=sha256(r.content).hexdigest(),
+                    last_modified=r.headers.get("Last-Modified"), elapsed_s=round(time.monotonic() - t, 2))
+                _failed.discard(url)
+                return r
         except requests.RequestException as e:
             log("fetch_error", url=url, error=repr(e)[:300], attempt=attempt)
+            wait = 1.0 + attempt
         if attempt < retries:
-            time.sleep(min(1.0 + attempt, max(0.0, _net_deadline - time.monotonic() - 2)))
+            time.sleep(min(wait, max(0.0, _net_deadline - time.monotonic() - 2)))
+    _failed.add(url)
     return None
 
 
@@ -83,7 +93,7 @@ def http_get(url, retries=3, timeout=None, headers=None):
     """Drop-in for sw_utils.http_get: same return type (requests.Response or None), never raises."""
     with _lock:
         r = _prefetched.pop(url, None)
-    return r if r is not None else _fetch(url, min(retries, 2), headers)
+    return r if r is not None else _fetch(url, headers=headers)
 
 
 _T0 = None                 # aware UTC datetime of the run (information cut-off)
@@ -129,6 +139,8 @@ def list_dir(url):
         (names if ok else dropped).append(name)
     if dropped:
         log("cutoff_filter", url=url, kept=len(names), hidden_not_published_at_t0=len(dropped), example=dropped[-1])
+    if r is None and url in _failed:                 # throttled / network error: let a later call try again
+        return ()
     _listings[url] = tuple(names)
     return _listings[url]
 
@@ -149,13 +161,16 @@ def ace_loader(ace_path):
 
 
 def prefetch_tasks(t0, C):
+    """Same slots as fc_predict.live_inputs / _live_fs: images are taken at the last 6 h slot ts = floor(t0, 6 h)
+    (t0 itself may be any hour, e.g. the dry run of 2026-11-11 ran with t0 = 16:00), not at t0."""
     import pandas as pd
+    ts = t0.floor("6h")
     img = []
     for k in range(11):
-        T = t0 - pd.Timedelta(hours=12 * k)
+        T = ts - pd.Timedelta(hours=12 * k)
         img += [("aia193", T, True), ("hmi", T, True)]
     hmi_img = {T for inst, T, _ in img if inst == "hmi"}
-    lo, hi = t0 - pd.Timedelta(days=C.PFSS_MAX_AGE_DAYS), t0 - pd.Timedelta(hours=C.PFSS_LATENCY_H)
+    lo, hi = ts - pd.Timedelta(days=C.PFSS_MAX_AGE_DAYS), ts - pd.Timedelta(hours=C.PFSS_LATENCY_H)
     pf = [("hmi", s, False) for s in reversed(pd.date_range(lo.ceil("6h"), hi.floor("6h"), freq="6h")) if s not in hmi_img]
     return img + pf
 
