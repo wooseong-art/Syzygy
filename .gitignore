@@ -8,3 +8,6 @@ __pycache__/
 # team model copied from wooseong-art/git_repo by submission_pack/tools/sync_model.py (only the manifest is tracked)
 submission_pack/model/*
 !submission_pack/model/MANIFEST.json
+
+# build / run logs downloaded by submit_real.py
+submission_logs/
