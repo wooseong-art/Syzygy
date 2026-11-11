@@ -5,8 +5,8 @@
       ace_hourly  : {hour_start (aware UTC): V km/s}, cut off at t0 (syzygy_live.ace)
       ace_source  : {hour_start: "RT" | "K0" | "RTSW"}
       deadline    : time.monotonic() value by which this call must return
-The child (python3 -m syzygy_model.runner) is killed at the deadline. Values are None while the
-hourly conversion rule is undecided (syzygy_model/hourly.py); info then still carries the model output.
+The child (python3 -m syzygy_model.runner) is killed at the deadline. Values are None when the model
+has no usable hourly output (syzygy_model/hourly.py guards); info then still carries the model output.
 """
 import json
 import os

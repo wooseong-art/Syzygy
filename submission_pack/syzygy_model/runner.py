@@ -14,6 +14,7 @@ Runtime patches (fc_predict.py and sw_utils.py stay byte-identical to git_repo):
                                    (cut off at t0 − 5 min) instead of the L2 → K0 → RT chain
   4. predict(..., monitor=False) → no writes to monitoring/ or predictions/
   5. astropy IERS auto-download off (would contact an undeclared host)
+  6. sw_utils.list_dir          → hides JSOC files not yet published at t0 (listing mtime), see list_dir()
 Prefetch: the candidate FITS for every image slot (t0 − 12k h, k = 0…10, AIA 193 + HMI) and the PFSS
 HMI history ([t0 − 28 d, t0 − 2 h], newest first) are downloaded in parallel while the 30 networks load.
 fc_predict then runs exactly as written; its own sequential requests hit the in-memory cache.
@@ -85,6 +86,53 @@ def http_get(url, retries=3, timeout=None, headers=None):
     return r if r is not None else _fetch(url, min(retries, 2), headers)
 
 
+_T0 = None                 # aware UTC datetime of the run (information cut-off)
+_listings = {}
+NRT_FALLBACK_LAG_MIN = {"aia": 30, "hmi": 90}      # NRT row without a listing mtime: obs <= t0 - lag
+DEFINITIVE_LAG_MIN = {"aia": 60, "hmi": 180}       # definitive file that appeared after t0: its NRT twin was public by obs + lag
+
+
+def list_dir(url):
+    """Drop-in for sw_utils.list_dir that hides files not yet PUBLISHED at t0.
+
+    fc_predict only checks observation time <= slot. A container that starts some minutes after t0 (or an
+    organiser re-run days later) would otherwise pick up files published after t0. Publication time = the
+    modification time in the JSOC directory listing (UTC, to the minute; +1 min for the truncated seconds).
+      NRT file         keep iff mtime + 1 min <= t0   (no mtime in the row: obs <= t0 - 30 min AIA / 90 min HMI)
+      definitive file  keep iff mtime + 1 min <= t0, or obs <= t0 - 60 min (AIA) / 180 min (HMI): the same
+                       observation was already public as NRT by then (NRT lag ~15-20 min AIA, ~50 min HMI),
+                       and the NRT copy is deleted once the definitive one exists.
+    Rows that are not AIA/HMI FITS files are passed through.
+    """
+    if url in _listings:
+        return _listings[url]
+    from datetime import timedelta
+    from syzygy_live import sdo
+    r = http_get(url)
+    names, dropped = [], []
+    for name, mt in sdo._ROW.findall(r.text if r is not None else ""):
+        a, h = sdo._AIA.match(name), sdo._HMI.match(name)
+        if not (a or h) or _T0 is None:
+            names.append(name)
+            continue
+        if a:
+            kind, nrt = "aia", "/nrt/" in url
+            obs = datetime.strptime(a.group(1) + a.group(2).ljust(6, "0"), "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+        else:
+            kind, nrt = "hmi", bool(h.group(1))
+            obs = datetime.strptime(h.group(2) + h.group(3), "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc) - sdo.TAI_MINUS_UTC
+        mtime = datetime.strptime(mt, "%d-%b-%Y %H:%M").replace(tzinfo=timezone.utc) if mt else None
+        ok = mtime is not None and mtime + timedelta(minutes=1) <= _T0
+        if not ok and (mtime is None or not nrt):
+            lag = NRT_FALLBACK_LAG_MIN[kind] if nrt else DEFINITIVE_LAG_MIN[kind]
+            ok = obs <= _T0 - timedelta(minutes=lag)
+        (names if ok else dropped).append(name)
+    if dropped:
+        log("cutoff_filter", url=url, kept=len(names), hidden_not_published_at_t0=len(dropped), example=dropped[-1])
+    _listings[url] = tuple(names)
+    return _listings[url]
+
+
 def ace_loader(ace_path):
     import numpy as np
     import pandas as pd
@@ -154,7 +202,10 @@ def main(argv):
     log("imports_done")
 
     FP.LIVE_CACHE = CACHE / "live_images"
+    global _T0
+    _T0 = datetime.strptime(t0_s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     U.http_get = http_get
+    U.list_dir = list_dir
     U.load_ace_hourly = ace_loader(ace_path)
     t0 = pd.Timestamp(t0_s).tz_convert(None)
 
@@ -184,16 +235,17 @@ def main(argv):
     log("predict_done", seconds=round(time.monotonic() - t_pred, 1), state=res["status"]["state"],
         final_model=res["final_model"], final_speed_kms=res["final_speed_kms"], missing=res["status"]["missing_inputs"])
 
-    from syzygy_model.hourly import to_hourly, RULE
+    from syzygy_model.hourly import to_hourly
     hours = json.loads(Path(ace_path).read_text(encoding="utf-8"))["hours"]
-    forecast = to_hourly(res, hours, t0)
+    forecast, hourly_info = to_hourly(res, hours, t0)
     res["status"]["download_log"] = f"{len(res['status']['download_log'])} entries (see stdout)"
-    doc = {"forecast": forecast, "hourly_rule": RULE, "result": res, "prefetch": prefetch,
+    doc = {"forecast": forecast, "hourly": hourly_info, "result": res, "prefetch": prefetch,
            "total_s": round(time.monotonic() - T_START, 1)}
     tmp = out_path + ".tmp"
     Path(tmp).write_text(json.dumps(doc, default=str), encoding="utf-8")
     os.replace(tmp, out_path)
-    log("model_done", total_s=doc["total_s"], hourly=forecast is not None)
+    log("model_done", total_s=doc["total_s"], hourly=hourly_info,
+        first=None if forecast is None else forecast[0], last=None if forecast is None else forecast[-1])
     return 0
 
 

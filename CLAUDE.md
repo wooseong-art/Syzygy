@@ -1,6 +1,6 @@
 # Benchlab Solar Wind Prediction — Docker 제출 작업 브리프
 
-> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-11.
+> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-12.
 > 출처: starter-kit 레포(`wooseong-art/Syzygy`, branch `starter-kit`), Slack `#benchlab-support-and-q`, 주최측 공지 PDF(2026-11-03), 엔드포인트 실측(2026-11-08).
 
 ## 0. 목표와 마감
@@ -79,14 +79,19 @@
 
 ## 6. 모델 코드 (`wooseong-art/git_repo`, main, 2026-11-10 분석 / 2026-11-11 갱신)
 
-**현재 반영 커밋: `5a7dffa`** (2026-11-11, "매시간 발행·학습 데이터 검사 반영"). 이전 `1333bb2`.
+**현재 반영 커밋: `909af51`** (2026-11-11 23:58 KST, "1 시간 단위 속도 96 개 출력 추가 (KI = 4 horizon 최종값 보간, 새 가중치 없음)"). 이전 `5a7dffa`, `1333bb2`.
+
+**`909af51` 변경 내용** (추론 관련 변경 파일은 `fc_predict.py` 하나 → sync 반영, PASS)
+- 결과에 **`hourly_speed_kms` 96개** 추가: k번째 = ACE 1시간 평균 **[t0+k−1, t0+k)**, k = 1…96 (`hourly_window_start_utc`, `hourly_lead_h`, `hourly_model`, `hourly_ki_kms`).
+- 규칙 **KI**(기본): `np.interp(k − 0.5, [−3, 21, 45, 69, 93], [v_now, final 4개])` — v_now를 −3h, 4개 최종값을 각 6h 창 중심에 두고 선형 보간, 93h 뒤는 마지막 값. **새 가중치 없음, 4 horizon 출력 불변** ("모델 변경"은 이 출력 추가를 뜻함).
+- H96(1h × 96 정답으로 재학습)도 시험: valid 62.02 vs KI 62.15, test 63.41 vs KI 63.18 → 기본값 KI. **H96 코드·가중치는 레포에 없음**(`"hourly": "h96"`은 동작 안 함). 지속 예보는 valid 95.54 / test 88.67. lead 1–6h test RMSE: KI 28.4, H96 27.5.
 
 **`5a7dffa` 변경 내용** (추론 관련 변경 파일은 `fc_predict.py` 하나 → sync로 반영, 재빌드·테스트 PASS)
 - **매시간 발행**: t0 = 실행 시각의 정시(`cadence` 기본 `"1h"`, `"6h"`면 예전 6h 격자). ACE 입력은 t0 기준, 영상·CH·G·masked193·PFSS는 직전 6h slot(`floor(t0, 6h)`) 기준. 결과에 `issue_cadence`, `image_slot_utc` 추가. valid 검증(`fc_hourly_eval.py`): 정시 사이 offset 0–5h RMSE 차이 −0.12…+0.06(CI 0 포함), 모든 offset에서 최종 모델이 fallback보다 3.6–3.7 좋음.
   - **Benchlab에는 영향 없음**: Benchlab t0는 00/06/12/18 정각 → `floor("h") == floor("6h")`. t0가 정각이 아니어도 그대로 처리됨.
 - **`weights` 옵션**: `"original"`(기본, 기존 가중치) / `"masked"`(SEP 중 K0 오염 ACE 14시간 결측 처리 후 재학습. valid −0.10, test +0.43으로 기본값 미채택, **레포에 파일 없음**). 결과에 `weights_set`.
 - 데이터 검사 `fc_data_audit.py`(23개 중 21 통과, 주의: SEP 오염 ACE 12시간, 장기 입력 창이 다른 split 값 사용 11%). 평가·문서 파일은 추론에 불필요해 복사 안 함.
-- ⚠️ **72개 변환 규칙은 없음.** 팀원은 "1시간 단위 출력"을 **매시간 발행**으로 이해함(`configs/hourly_issue_prereg.json`: "최종 모델 1 시간 단위 출력 = 매시간 새 예보… 출력은 그대로 +24/48/72/96 h 각 6 h 평균"). 우리가 필요한 것은 **한 번 실행(6h마다)에 t0+1…t0+72h 시간별 72개** → 팀원에게 재전달 필요.
+- (당시) 72개 변환 규칙 없음 → **`909af51`에서 해결**. 팀원은 "1시간 단위 출력"을 **매시간 발행**으로 이해함(`configs/hourly_issue_prereg.json`: "최종 모델 1 시간 단위 출력 = 매시간 새 예보… 출력은 그대로 +24/48/72/96 h 각 6 h 평균"). 우리가 필요한 것은 한 번 실행(6h마다)에 t0+1…t0+72h 시간별 72개였음.
 
 **출처**: `https://github.com/wooseong-art/git_repo` (최초 분석 커밋 1333bb2, 447 파일, 80 MB). 이전 `syzygy_code/`(브랜치 `wooseong-art-Syzygy_code`)는 config가 플레어 프로젝트 파일이고 모듈·가중치가 빠져 있었음 → **이 레포로 대체**. 추론 진입점 `code/experiments/syzygy_final_cme_free_2026/fc_predict.py`(`predict(t0, {"mode":"live", ...})`).
 
@@ -111,7 +116,7 @@ fallback: 영상·PFSS 입력 하나라도 없으면 v = G01, 보정 boxcox_maps
 - PFSS f_s(R2): [T − 28일, T − 2h] HMI 6h 간격 → Carrington 지도 → l ≤ 20 → CH 자기력선 추적 → f_s 5분위.
 - 인과성: 영상 obs ≤ slot, PFSS HMI obs ≤ T − 2h, ACE hour < t0. **공개 시각은 보지 않음** + 확정본 우선 → 실시간은 괜찮지만 과거 t0 백테스트는 누수.
 
-**출력 불일치**: t0(정시, Benchlab에선 6h 정각)에서 **h = 24/48/72/96의 ACE 6h 평균 [t0+h−6, t0+h) 4개**(Router/RegimeNet은 16 bin) → **시간별 72개 변환 규칙 필요** (`5a7dffa`에도 없음). 72시간 안에서 모델 값이 걸치는 구간은 t0+18–24h, 42–48h, 66–72h뿐(h=96은 보간 끝점용), t0+0–18h는 값 없음.
+**출력 불일치**: t0(정시, Benchlab에선 6h 정각)에서 **h = 24/48/72/96의 ACE 6h 평균 [t0+h−6, t0+h) 4개**(Router/RegimeNet은 16 bin) → `909af51`부터 팀원 코드가 KI 보간으로 **시간별 96개**(`hourly_speed_kms`)를 같이 냄 → 그중 72개를 사용(§7 `hourly.py`). 모델 고유 출력이 걸치는 구간은 t0+18–24h, 42–48h, 66–72h뿐이고 나머지는 v_now와의 선형 보간.
 
 **팀원 측 검증**: archive ↔ live 입력 과거 4시각 비트 일치, 예보 차 ≤ 0.01 km/s, 모델 계산 0.07초, live 1회(2026-11-04 12:00) 상태 OK. **단, 캐시 빈 상태에서 입력 준비 5,466초**(한국에서 JSOC 103건 순차, 101장).
 
@@ -121,12 +126,12 @@ fallback: 영상·PFSS 입력 하나라도 없으면 v = G01, 보정 boxcox_maps
 2. ACE: `sw_utils.load_ace_hourly`는 L2 HAPI → L2 CDAS → K0 순, timeout 300초(L2는 2024 중단) → `syzygy_live.ace` 결과 주입(`live_inputs`의 `ace_source` 분기 활용).
 3. `http_get`이 재시도 후 예외 → `predict()` 전체 중단. 별도 프로세스/try로 격리.
 4. 쓰기: `LIVE_CACHE` = 코드 폴더 `features/live_images`, `monitor=True` 기본(monitoring/, predictions/) → `/tmp`로, `monitor=False`.
-5. 과거 t0 테스트 누수 → `syzygy_live.sdo`(목록 mtime 기준)로 후보 필터.
+5. ~~공개 시각 미확인~~ → runner가 `sw_utils.list_dir`를 패치해 t0에 미공개인 파일을 숨김(§7). 실시간에서도 필요했음: 컨테이너가 t0보다 늦게 뜨면 t0 이후 공개된 NRT 파일을 받게 됨.
 6. astropy IERS 자동 다운로드 가능성(미선언 도메인) → 컨테이너에서 확인, 필요 시 `auto_download=False`.
 7. 베이스 이미지 Python 3.12-slim으로 맞추는 것 검토(개발 3.12.3).
 8. 실시간 ACE(RT) vs 학습(L2/K0) 차이 bias +2.4 km/s, G01 RMSE +0.7–1.2 (감수 가능).
 
-## 7. 현재 구현 (`submission_pack/`, 단계 B 완료 + 단계 C 모델 연결 2026-11-10)
+## 7. 현재 구현 (`submission_pack/`, 모델 + 72개 변환 + 컷오프 필터까지 완료 2026-11-12)
 
 ```
 run.sh <t0>  →  python3 /app/predict.py "$T0" "$OUT" || true; /app/emergency.sh "$T0" "$OUT"  →  upload.sh
@@ -135,14 +140,16 @@ predict.py
  ├─ watchdog (SYZYGY_BUDGET_S, 기본 600초) → os._exit(0)
  ├─ ① ace.load_ace_hourly(t0) (예산 180초) → baseline.forecast → 저장
  ├─ ② model_stage.predict(t0, ace_hourly, deadline, ace_source) → 자식 프로세스 `python3 -m syzygy_model.runner`
- │     → (72개 | None, info). 72개면 stage "model"로 저장, None이면 baseline 유지 + info.model에 모델 결과 기록
+ │     → (72개 | None, info). 72개면 stage "model"로 저장(info.model = 모델 결과, info.fallback = baseline 요약),
+ │       None이면 baseline 유지 + info.model에 모델 결과 기록
  └─ 각 저장은 원자적(os.replace). sanitize: 72개 아니면 폐기, NaN→430, clip 200–1200
 ```
 
 **모델 연결 구조 (팀원 코드는 수정하지 않음)**
 - `model/`: `tools/sync_model.py <git_repo 경로>`가 git_repo에서 **그대로 복사**(같은 상대 경로). import closure + `cr_events`가 import 시 부르는 `external/proswin` 6개 모듈 + Pipeline이 읽는 json/pkl/pt. `model/MANIFEST.json`에 commit·sha256. **모델 코드 변경 시: 스크립트 재실행 → 변경 파일만 표시 → 재빌드.** `tools/`는 이미지에서 제외. **git에는 `model/MANIFEST.json`만 추적**(`.gitignore`: `submission_pack/model/*`, `!…/MANIFEST.json`) → 새로 클론하면 sync 스크립트로 `model/` 생성 후 빌드.
-- `syzygy_model/runner.py`: 실행 중 패치만 함 — `LIVE_CACHE` → `/tmp/syzygy_cache`, `sw_utils.http_get` → 예외 없음·짧은 timeout·재현성 로그·선다운로드 캐시, `sw_utils.load_ace_hourly` → syzygy_live ACE 주입, `monitor=False`, astropy IERS 자동 다운로드 끔. 영상 slot 22개 + PFSS HMI(최신부터) **병렬 선다운로드**(`SYZYGY_DL_WORKERS`, 기본 12) 동안 Pipeline 로드. 네트워크 마감 = 모델 예산 − `SYZYGY_COMPUTE_RESERVE_S`(150초).
-- `syzygy_model/hourly.py`: **변환 규칙 미정 → `to_hourly()`가 None** (규칙 확정 후 구현). 가드: `ACE_48h` 결측이면 None.
+- `syzygy_model/runner.py`: 실행 중 패치만 함 — `LIVE_CACHE` → `/tmp/syzygy_cache`, `sw_utils.http_get` → 예외 없음·짧은 timeout·재현성 로그·선다운로드 캐시, `sw_utils.load_ace_hourly` → syzygy_live ACE 주입, `monitor=False`, astropy IERS 자동 다운로드 끔, **`sw_utils.list_dir` → 공개 시각 컷오프 필터**(아래). 영상 slot 22개 + PFSS HMI(최신부터) **병렬 선다운로드**(`SYZYGY_DL_WORKERS`, 기본 12) 동안 Pipeline 로드. 네트워크 마감 = 모델 예산 − `SYZYGY_COMPUTE_RESERVE_S`(150초).
+- **공개 시각 컷오프 필터** (`runner.list_dir`, 2026-11-12): JSOC 목록의 수정 시각을 공개 시각으로 봄. NRT 파일은 `mtime + 1분 ≤ t0`만 사용(mtime 없으면 obs ≤ t0 − 30분 AIA / 90분 HMI). 확정본은 `mtime + 1분 ≤ t0` 또는 obs ≤ t0 − 60분(AIA) / 180분(HMI) — 같은 관측이 NRT로 이미 공개됐던 것으로 간주(확정본이 생기면 HMI NRT는 삭제되므로 재실행 재현용). 숨긴 파일 수는 `cutoff_filter` 로그.
+- `syzygy_model/hourly.py`: 팀원 `hourly_speed_kms`(96개)에서 **72개 선택만** 함(값은 안 바꿈). **`LABEL_SHIFT_H = 1` → `hourly[1:73]`**: SWPC `ace_swepam_1h.json`의 `time_tag`가 **시간의 시작**이라(2026-11-11 실측: 15:40 UTC에 최신 행 14:00, 1분 자료 대비 MAE 시작 7.4 vs 끝 13.1 km/s) "t0+k h" 정답 구간은 [t0+k, t0+k+1) = 팀원 k+1번째. 주최측이 "끝 시각 라벨"이라고 하면 0으로. baseline도 같은 시작 라벨 규칙. 가드: `ACE_48h` 결측이면 None(baseline 유지).
 - 이미지: Python **3.12-slim**, requirements = 팀원 버전 고정(torch 2.4.1+cpu 등).
 
 | 파일 | 역할 |
@@ -152,12 +159,15 @@ predict.py
 | `syzygy_live/ace.py` | RT 일별(8 병렬) → K0(24h 이전 공백 ≥ 6h) → RTSW(최근 24h 공백). 컷오프 obs ≤ t0 − 5분. 시간 평균 최소 RT 10개 / K0 3개 |
 | `syzygy_live/sdo.py` | `find_aia` / `find_hmi` / `download`. obs ∈ [slot − 60분, min(slot, t0)], 목록 mtime + 1분 ≤ t0. 확정본 우선(공개 조건으로 누수 자동 차단), HMI TAI→UTC |
 | `syzygy_live/baseline.py` | `w·v_now + (1−w)·v_rec`, w = exp(−k/48), v_rec = 655h 전 ±3h 평균 |
-| `model_stage.py` | 모델 자리(인터페이스 명시) |
+| `model_stage.py` | 모델 자식 프로세스 실행·마감 시 강제 종료, 결과 JSON 읽기 |
+| `syzygy_model/runner.py`, `hourly.py` | 팀원 코드 실행 중 패치 + 선다운로드 + 컷오프 필터 / 96개 → 72개 선택 |
+| `tools/sync_model.py` | git_repo → `model/` 복사, MANIFEST 갱신 (이미지 제외) |
+| `README.md` | 제출용 문서 — 2026-11-12 모델 버전으로 전면 갱신(모델, KI 규칙, 컷오프 규칙, fallback 순서) |
 | `emergency.sh` | 유효 파일이 없을 때만 430 × 72 작성 |
 
 - `syzygy_live/`는 **표준 라이브러리만** 사용 → 모델 스택이 깨져도 baseline 동작.
 - `requirements.txt`: 팀원 개발 버전 고정(2026-11-10). `submission.json`: Syzygy / min070118@gmail.com / 4096 / 16384 / 도메인 4개(sohoftp, cdaweb, services.swpc, jsoc1).
-- 예제 `model.py` 삭제. 제출 ZIP: `Syzygy/submission_B.zip` (`.gitignore`에 `submission_*.zip`).
+- 예제 `model.py` 삭제. 제출 ZIP: `Syzygy/submission_B.zip`(baseline 버전), **`Syzygy/submission_C.zip`(모델 버전, 2026-11-12 생성, 115 파일 36.0 MB, `model/` 포함, 미제출)** — `.gitignore`에 `submission_*.zip`.
 
 **검증 결과 (2026-11-08)**
 - `test_local.sh` PASS: 템플릿 원본(1606 MiB) / 우리 버전(197 MiB, 실행 9초).
@@ -177,6 +187,11 @@ predict.py
 - sync 결과 `changed fc_predict.py` 1개. 이미지 1,948 MiB. `test_local.sh` **PASS, runtime 52초**(선다운로드 17초, predict 23초).
 - state OK, `C+HBC0.25` = 551.4 / 486.1 / 443.6 / 422.4 km/s, `issue_cadence` 1h, `image_slot_utc` 00:00, `weights_set` original. 예보는 여전히 baseline(변환 규칙 미정).
 
+**검증 결과 — `909af51` + 72개 변환 + 컷오프 필터 (2026-11-12 KST, t0 = 2026-11-11 12:00 UTC)**
+- sync `changed fc_predict.py` 1개. 이미지 1,948 MiB. `test_local.sh` **PASS, runtime 57–62초**, 출력 **stage "model"**, 72개 유한값(419–519 km/s), `forecast == hourly_speed_kms[1:73]`, forecast[0] 구간 시작 = t0+1h.
+- 컷오프 필터: t0 12:00을 15:50에 실행 → 목록 4개에서 223개 파일 숨김, 최신 사용 영상 AIA 11:45 / HMI nrt 11:00 (필터 전에는 t0 이후 공개된 AIA 11:57 등을 받았음 → 최종값 489.0 → 488.1로 소폭 변화). 과거 t0(11-08 06:00)도 state OK.
+- 장애: `--network none` → baseline 72개(모델은 ACE_48h 결측으로 hourly 거부), `SYZYGY_BUDGET_S=200` → stage model(G01 fallback + KI), `SYZYGY_BUDGET_S=2` → watchdog, 기후값. 모두 exit 0.
+
 ## 8. 테스트 방법
 
 - 로컬 테스트: `cd submission_pack/local_tests && bash test_local.sh <t0>`.
@@ -186,34 +201,27 @@ predict.py
 
 ## 9. 남은 작업
 
-(2026-11-11 기준. 마감 2026-11-19 23:59:59 UTC까지 8일)
+(2026-11-12 기준. 마감 2026-11-19 23:59:59 UTC = KST 11-20 08:59까지 약 8일)
 
 **완료**
-- ~~원본 config·모듈·가중치 수령~~ (`git_repo`, §6) / ~~모델 연결~~ (`syzygy_model/runner.py`, 팀원 코드 무수정) / ~~병렬 선다운로드·ACE 주입·예외 격리·`/tmp`~~ / ~~requirements 고정, Python 3.12-slim~~ / ~~로컬 PASS 161초, 장애 테스트~~ (§7)
-- ~~`model/` gitignore + MANIFEST만 추적~~ (커밋 5f75b00, `docker` 브랜치)
-- ~~모델 코드 변경분 `5a7dffa` 반영~~ (2026-11-11, `fc_predict.py`, PASS 52초) — `model/MANIFEST.json` 갱신분은 미커밋
+- ~~모델 수령·연결·병렬 선다운로드·ACE 주입·예외 격리~~ (§7) / ~~`model/` gitignore + MANIFEST 추적~~ / ~~`5a7dffa`·`909af51` 반영~~
+- ~~시간별 72개 변환~~ (팀원 KI 규칙, `hourly.py`) / ~~영상 공개 시각 컷오프 필터~~ / ~~제출 README 갱신~~ / ~~`submission_C.zip` 생성(미제출)~~ / ~~로컬 PASS + 장애 테스트~~
 
-**보류 / 결정 대기**
-- [ ] **B-7 실제 제출로 `ELIGIBLE` 확보** — 사용자 지시로 보류(**실제 제출 금지**, 승인 필요). `submit.py`는 conformance 전용 → `submission_pack`용 복사본 필요. PORTAL은 `.team`.
-- [ ] **시간별 72개 변환 규칙** (`syzygy_model/hourly.py`) — **`5a7dffa`에 없음**(팀원이 "매시간 발행"으로 이해). 사용자 선택 대기: ① 팀원에게 재요청 후 대기 ② 임시 규칙 구현(보간 + 앞쪽 baseline 혼합, 과거 t0 live 백테스트로 비율 결정, 권장) ③ 단순 보간. 확정 전에는 예보 = baseline, 모델 결과는 `info.model`에만 기록.
-- 모델 코드가 또 바뀌면: `python tools/sync_model.py <git_repo>` → 변경 파일 확인 → 재빌드 → `test_local.sh`.
-
-**진행 가능 / 다음 작업**
-1. [ ] 나머지 변경사항 커밋 (Dockerfile, predict.py, model_stage.py, requirements.txt, net.py, syzygy_model/, tools/, model/MANIFEST.json, CLAUDE.md) — 사용자 확인 후
-2. [ ] 과거 t0 테스트용 **영상 공개 시각 필터**(JSOC 목록 mtime ≤ t0) runner에 추가 — 백테스트 전 필수 (실시간 운영에는 영향 없음)
-3. [ ] 변환 규칙 백테스트 준비: 팀원 archive 예측(과거 t0별 `g01_kms`, `router_cf_16bin_kms`, `final_speed_kms`, `v_now_kms`) 수령 → ACE 시간별 정답으로 후보 규칙 MAE 비교 (보간 / baseline 혼합 / Router 16 bin 모양)
-4. [ ] 모델 vs baseline 백테스트 (변환 규칙 적용 후)
-5. [ ] 결정 대기 항목 반영 (§10): PFSS 부분 다운로드 처리, 자원 선언
-6. [ ] README 갱신 (데이터 소스, 공개 지연 LAG, 변환 규칙, fallback 단계)
-7. [ ] 최종 제출 — 재제출 실패 위험 고려해 마감 2–3일 전, 제출 ZIP은 따로 보관 (`model/` 포함)
+**다음 작업 (순서대로)**
+1. [ ] 변경사항 커밋 (README.md, model/MANIFEST.json, model_stage.py, predict.py, syzygy_model/hourly.py, runner.py, CLAUDE.md) — 사용자 확인 후
+2. [ ] **실제 제출로 `ELIGIBLE` 확보** — **사용자 승인 필요(현재 제출 금지 지시)**. `submit.py`는 conformance 전용 → `submission_pack`용 복사본 필요. PORTAL은 `.team`. 제출 후 dry run 로그로 AWS 실행 시간·접속 호스트 확인. 재제출 실패 위험 때문에 마감 2–3일 전(11-17 KST경)까지 권장.
+3. [ ] (선택) **KI vs baseline vs 혼합 백테스트** — 최근 30일 과거 t0를 컨테이너로 돌려 ACE 정답과 시간별 MAE 비교(1회 약 1분, 4–5일 이전은 HMI NRT 삭제로 확정본 사용). 앞쪽 1–12h에서 baseline 혼합이 나은지 확인. 팀원 archive 예측을 받으면 더 빠름.
+4. [ ] §10 결정 대기 항목 반영 (라벨 규칙, PFSS 부분 다운로드, 자원 선언)
+5. [ ] 모델 코드가 또 바뀌면: `python tools/sync_model.py <git_repo>` → 변경 파일 확인 → 재빌드 → `test_local.sh` → ZIP 재생성
 
 ## 10. 미확정 / 확인 필요
 
 - ~~원본 `config.py`, 빠진 모듈, 체크포인트~~ → `git_repo`로 수령 (2026-11-10).
-- **팀원에게 재전달 (최우선)**: "Benchlab은 6시간마다 한 번 실행하고, 그 한 번에 t0+1h…t0+72h **1시간 간격 72개**를 받는다. 지금 출력 4개(6시간 평균)를 72개로 바꾸는 규칙이 필요하다." (`5a7dffa`의 매시간 발행은 실행 주기 변경일 뿐 이 요구를 해결하지 않음. 팀원이 HELIOLAB 등 매시간 운영을 염두에 뒀을 가능성도 확인)
-- 팀원에게 추가 요청: ① 11-04 12:00 live 실행의 `features/live_images/*.npy`·`hmi_index.csv`·`forecast_20261104T1200_live.json`·`reports/live_input_check.json`·`inference_check.json` (컨테이너 결과 비트 대조용) ② **archive 예측**(과거 t0별 g01·router 16 bin·final·v_now, 변환 규칙 백테스트용) ③ 시간별 72개 변환 규칙 합의 ④ 모델 코드 수정 예정분 ⑤ (선택) Router **R0** 가중치 — 로컬 실측상 PFSS 시간 문제 작아 우선순위 낮음.
+- ~~72개 변환 규칙~~ → 팀원 `909af51` KI 규칙으로 해결 (2026-11-12 반영).
+- **시간 라벨 (결정 필요)**: 현재 `LABEL_SHIFT_H = 1`(정답 `time_tag` = 시간의 시작, 실측 근거 §7). 팀원 정의(k번째 = 끝 시각 t0+k)를 그대로 쓰려면 0. 차이는 보간값 1시간 이동(시간당 수 km/s 이하). 주최측 확인 시 확정.
+- 팀원에게 추가 요청: ① 11-04 12:00 live 실행의 `features/live_images/*.npy`·`hmi_index.csv`·`forecast_20261104T1200_live.json`·`reports/live_input_check.json`·`inference_check.json` (컨테이너 결과 비트 대조용) ② **archive 예측**(과거 t0별 g01·router 16 bin·final·v_now, 변환 규칙 백테스트용) ③ ~~시간별 72개 변환 규칙~~(해결) ④ 추가 수정 예정분(H96 채택 여부 포함 — 채택 시 코드·가중치 필요) ⑤ (선택) Router **R0** 가중치 — 로컬 실측상 PFSS 시간 문제 작아 우선순위 낮음.
 - 사용자 결정 대기: ① Python **3.12-slim** 사용 확인 (§2 템플릿은 3.11, 팀원 개발 3.12.3) ② PFSS용 HMI 부분 다운로드 시 그대로 계산(현재) vs 일정 비율 미만이면 G01 fallback ③ 자원 4 vCPU / 16 GB 유지(권장, 실측 최대 1.08 GB) vs 축소.
-- `forecast[k]`와 ACE 시간 라벨의 정확한 대응(t0+(k+1)h가 시간 시작인지 끝인지) — 주최측 확인.
+- `forecast[k]`와 ACE 시간 라벨의 정확한 대응 — SWPC `time_tag`는 시작 시각으로 실측 확인(2026-11-11). Benchlab이 forecast 시각을 `time_tag`에 그대로 맞추는지는 주최측 확인 필요.
 - 품질 플래그 처리 방식, live 시작일 (주최측 공지 대기).
 - 최종 Participation Terms 전문 (6.2–6.8절).
 - ~~conformance 완료 여부~~ → **완료** (커밋 0534dfd). ~~팀명~~ → `Syzygy` (`.team`).

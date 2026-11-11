@@ -8,7 +8,7 @@ Always exits 0 with a valid 72-value forecast in out.json. Progressive output: t
 time-out, OOM kill of a sub-step) the best forecast so far is already on disk.
   stage 0  climatology                       written immediately
   stage 1  baseline (persistence+recurrence) from ACE history
-  stage 2  model                             model_stage.predict (placeholder until wired in)
+  stage 2  model                             model_stage.predict (team ensemble in a child process)
 A watchdog thread exits the process (status 0) once the time budget is used up.
 Logs go to stdout as JSON lines; the forecast goes only to the output file.
 """
@@ -109,7 +109,7 @@ def main(argv):
             if vals:
                 write_forecast(out, t0_str, valid_from, vals, "model", {"model": minfo, "fallback": best[2]})
             else:
-                net.log("stage_skipped", stage="model", reason="no hourly output (rule undecided or model failed)")
+                net.log("stage_skipped", stage="model", reason="no usable hourly output from the model")
                 if minfo:
                     write_forecast(out, t0_str, valid_from, best[0], best[1], {**best[2], "model": minfo})
         else:
