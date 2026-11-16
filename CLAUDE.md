@@ -1,6 +1,6 @@
 # Benchlab Solar Wind Prediction — Docker 제출 작업 브리프
 
-> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-15.
+> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-16.
 > 출처: starter-kit 레포(`wooseong-art/Syzygy`, branch `starter-kit`; 원본 `Trillium-Technologies/benchlab-starter-kit`), Slack `#benchlab-support-and-q` + 고정 시트 `Benchlab_Questions_A_to_F.xlsx`(2026-11-15 확인, §11), 주최측 공지 PDF(2026-11-03), 엔드포인트 실측(2026-11-08).
 
 ## 0. 목표와 마감
@@ -119,6 +119,11 @@ v_final = v + 0.25·p_occ·(BoxCox_C(v) − v),  p_occ = mean_seed(sigmoid(O occ
 fallback: 영상·PFSS 입력 하나라도 없으면 v = G01, 보정 boxcox_maps_A
 ```
 - 성능(RMSE km/s, 4 horizon): 최종 valid 63.98 / test(탐색) 65.57, G01 67.69 / 67.00. test 이득 −1.4(CI 0 포함). CME(DONKI) 미사용.
+- 구성 요소 (2026-11-16 코드 확인):
+  - **G01** = `physical_factorial_ablation` E001(`G4x3`): MLP. 입력 ACE 48h + 26–28일 창 + v27 + v_now + **CH 격자 4×3 면적 × 4시점**(영상 자체는 안 봄). 출력 `v_now + Δ[24,48,72,96]`(head 0 초기화 = 지속 예보에서 출발).
+  - **RegimeNetCF**: CNN(AIA193+HMI 5시점 10채널 128²) + ACE 24h + CH 특징 118 → 상태 3개(Slow/Transition/HSS)별 ΔV + anchor, 16 bin.
+  - **Router R2** = `MoENet`(role router): CNN(CH-masked AIA193 t0) + ACE + PFSS f_s → bin별 상태 확률. `V = anchor + Σ softmax·ΔV`(ΔV는 같은 seed RegimeNetCF).
+- **학습 loss / 선택 기준** (`config.py`, `preregistration.json`): G01 = 단순 RMSE. RegimeNetCF = 고속 가중 MSE(관측 500→700 km/s에서 1→2배, `HS_V0/HS_V1/HS_WEIGHT`) + 0.3·class-weighted CE + 0.5·상태 ΔV MSE. Router = class-weighted CE. O = BCE. checkpoint는 validation RMSE(Router는 HSS RMSE, Slow +2 조건), **결합 비율 0.5·보정 0.25도 validation RMSE로 선택** → 대회 지표(S, TRMSE)에 맞춘 선택은 없음.
 
 **입력**
 - ACE 시간별 V, [t0 − 696h, t0). 정규화 `(V − 430) / 100`, 결측 0 + mask.
@@ -220,7 +225,7 @@ predict.py
 
 ## 9. 남은 작업
 
-(2026-11-15 기준. 마감 2026-11-19 23:59:59 UTC = KST 11-20 08:59까지 약 4일. 마지막 제출은 주최측 권장 11-19 18:00 UTC보다 이르게, KST 11-18경까지)
+(2026-11-16 기준. 마감 2026-11-19 23:59:59 UTC = KST 11-20 08:59까지 약 3일. 현재 제출본 유지 방침(재제출은 팀원 모델 변경 시에만). 마지막 제출은 주최측 권장 11-19 18:00 UTC보다 이르게, KST 11-18경까지)
 
 **완료**
 - ~~모델 수령·연결~~ / ~~`5a7dffa`·`909af51` 반영~~ / ~~72개 변환(KI)~~ / ~~공개 시각 컷오프 필터~~ / ~~제출 README~~ / ~~`submit_real.py`~~
@@ -241,6 +246,13 @@ predict.py
 4. [ ] §10 결정 대기 항목 반영 후 필요 시 최종 재제출 (라벨 규칙, baseline 혼합 여부, PFSS 부분 다운로드, 자원 선언)
 5. [ ] 모델 코드가 또 바뀌면: `python tools/sync_model.py <git_repo>` → 변경 파일 확인 → 재빌드 → `test_local.sh` → `submit_real.py check`
 6. [ ] `ELIGIBLE` 확정 버전의 ZIP 보관 (`submission_real.zip`은 실행할 때마다 덮어씀. 기존 `submission_B/C.zip`·`kit.zip`은 사용자가 삭제함 — 제출 버전은 git 커밋으로 재현 가능)
+7. [ ] **live 기간 운영** (11-20 ~ 2027-02): 포털은 실행 상태만(`submit_real.py status`), 점수는 benchlab.live(첫 순위 11-23경, 72h 관측이 모여야 채점). 로그 링크는 1시간 유효·최근 실행만 보이므로 `submit_real.py logs`로 주기적으로 받아 둘 것(대회 뒤 오차 분석 자료). 자동 저장 스크립트는 제안만 함(미작성).
+8. [ ] **대회 뒤 개선 실험 — 팀원에게 전달할 문서 `loss_retrain_plan.md`** (2026-11-16 작성, git 미추가). **이번 제출본은 변경하지 않음.**
+   - 근거: 백테스트에서 TRMSE(94.8)가 RMSE(54.8)보다 훨씬 큼 → 빠른 바람 오차가 점수를 지배. 현재 학습·선택은 RMSE 중심(§6).
+   - 내용: 구조·입력·출력(4개 + KI)은 그대로, **loss와 선택 기준만 S로**. TIMSE = train 고정 분위수로 만든 샘플 가중치 w(v)의 가중 MSE와 같음(공식 `timse_percentile`과 일치 확인). `AdaptiveSLoss`: horizon별 계수 a_τ = S_τ/(4·MSE_τ), b_τ = S_τ/(4·TMSE_τ)를 EMA 통계로 매 step 계산(no_grad) → α_τ = MSE/(MSE+TMSE) 자동(현재 수준 ≈ 0.25). α를 `nn.Parameter`로 학습하면 α → 0으로 무너지므로 금지. 남는 탐색 변수 gamma {0.5,1,2} × w_cap {0.98,0.99,0.995}(seed 42로 9회 → 최적 조합 seed 5개), 고정 α 0.25 비교 1회.
+   - 단계: 0 재학습 없이 결합 비율·보정 강도를 validation S로 재선택 → 1 G01(CPU) → 2 RegimeNetCF(GPU) → 3 Router checkpoint 재선택 → 4 BoxCox 재적합·최종 재선택. 모든 선택은 대회 형식(KI → `hourly[1:73]`, 1h 정답)의 validation S.
+   - 검증(2026-11-16, `swp-local` 이미지 안 torch 2.4.1, 합성 자료): 문서 코드 그대로 600 step 정상 학습, α 0.2대 → 0.3대로 서서히 변화, **기울기가 정확한 S 미분과 cosine 1.000000**. 실제 모델 효과는 미확인.
+   - H96(1h 직접 출력)은 RMSE 기준 KI와 동률이라 이번 실험에서 제외. S loss에서 효과가 보이면 그때 비교.
 
 ## 10. 미확정 / 확인 필요
 
