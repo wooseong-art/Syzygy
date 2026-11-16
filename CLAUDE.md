@@ -1,15 +1,17 @@
 # Benchlab Solar Wind Prediction — Docker 제출 작업 브리프
 
-> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-12.
-> 출처: starter-kit 레포(`wooseong-art/Syzygy`, branch `starter-kit`), Slack `#benchlab-support-and-q`, 주최측 공지 PDF(2026-11-03), 엔드포인트 실측(2026-11-08).
+> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-15.
+> 출처: starter-kit 레포(`wooseong-art/Syzygy`, branch `starter-kit`; 원본 `Trillium-Technologies/benchlab-starter-kit`), Slack `#benchlab-support-and-q` + 고정 시트 `Benchlab_Questions_A_to_F.xlsx`(2026-11-15 확인, §11), 주최측 공지 PDF(2026-11-03), 엔드포인트 실측(2026-11-08).
 
 ## 0. 목표와 마감
 
 - 이미 학습된 태양풍 속도 예측 모델을 **Benchlab 제출용 Docker 이미지**로 패키징한다.
 - 트랙: **Operational Podium (100% in-container)** — 상금($20k) 대상. 외부 연산 금지.
 - **코드 프리즈: 2026-11-19 23:59:59 UTC (= KST 11-20 08:59)**. 그 전에 실제 제출이 dry run을 통과해 `ELIGIBLE` 상태여야 함. 프리즈 뒤에는 이미지 고정(코드 수정·재학습·수동 개입 불가), 입력 데이터만 매 실행 새로 받음.
-- **현황 (2026-11-12)**: 첫 실제 제출이 **`ELIGIBLE` 달성**(dry run t0 = 11-11 16:00 UTC, §7). 이후 수정본(`bf45c55`) 재제출 → 결과 확인 필요(§9).
-- 점수는 dry run에서 나오지 않음(자격 검사만). live 평가 시작 후 리더보드에서 확인. **live 시작일 미공지**(프리즈 이후로 추정, Slack 확인 필요).
+- **현황 (2026-11-15)**: 수정본 **`bf45c55`가 `ELIGIBLE`**(재제출 dry run 11-11 16:18 UTC, pull 17초 + run 80초, §7). 현재 live에 들어갈 버전.
+- **live 일정 (주최측 확정, §11)**: 첫 채점 예보 **t0 = 2026-11-20 00:00 UTC**, 마지막 **2027-02-11 18:00 UTC**(약 3개월). t0는 항상 00/06/12/18 정각. 리더보드 첫 순위는 시작 **3일 뒤**(benchlab.live, 로그인 불필요). 최종 순위는 2027-02-25 18:00 UTC 시점 ACE 월별 파일 기준.
+- **마감 시점의 마지막 업로드가 `ELIGIBLE`이어야 함**(이전 버전이 통과했어도 무효). 주최측 권장: **11-19 18:00 UTC(KST 11-20 03:00)까지 업로드**. 팀원 전원 참가 약관(Adobe Sign) 서명 필요.
+- 점수는 dry run에서 나오지 않음(자격 검사만). **공식 채점기 백테스트(2026-10-16~11-12, 112주기): 제출본 S_final 71.6 vs 공식 baseline 130–150, 우리 baseline 107 → 현재 제출본 유지**(§9).
 - 재제출하면 이전 ELIGIBLE 버전이 대체됨 → 새 버전이 실패하면 자격을 잃을 수 있음. 마감 직전 무리한 변경 금지.
 
 ## 1. 실행 계약 (플랫폼이 강제)
@@ -54,13 +56,19 @@
 - 관측 timestamp가 t0 이전이라는 것만으로는 부족. 공개 시각을 모르면 보수적 지연(LAG)을 적용하고 README에 문서화.
 - 실시간 API와 아카이브는 t0 이후 데이터도 반환하므로 **직접 잘라낼 것**.
 
-**재현성 (권장)**: 다운로드마다 URL, 받은 시각, Last-Modified, sha256을 stdout 로그로. 주최측 재실행 시 원본 변경 증거가 되면 실패로 보지 않음.
+**재현성 (권장)**: 다운로드마다 URL, 받은 시각, Last-Modified, sha256을 stdout 로그로. 주최측 재실행 시 원본 변경 증거가 되면 실패로 보지 않음(Terms 6.5).
+
+**보수적 지연 규칙 (주최측 답변, 2026-11)**: 공개 시각을 알 수 없는 소스는 보수적 지연을 써도 됨 — 조건은 **README에 명시 + 코드로 강제**. README에 ① 지연 시간 ② 시간 라벨 해석(시작/끝) ③ 받은 시각 기록 여부를 적을 것. live 실행은 t0 직후 받으므로 이후 수정본을 걸러낼 필요 없음. 접속 도메인은 리다이렉트 포함 전부 선언.
 
 ## 4. 채점
 
-- 정답: **ACE/SWEPAM 1시간 Bulk Speed**. 실시간 리더보드는 SWPC `ace_swepam_1h.json`.
-- 결측과 fill value는 제외. 품질 플래그 처리는 추후 공지.
-- **예측값이 빠진 시간은 persistence(t0 이전 마지막 유효 ACE 값)로 대체되어 채점됨.**
+- 정답: **ACE/SWEPAM 1시간 Bulk Speed**, 월별 아카이브 `https://sohoftp.nascom.nasa.gov/sdb/goes/ace/monthly/YYYYMM_ace_swepam_1h.txt` (행: `YR MO DA HHMM MJD SOD S Np V T`). 실시간 JSON `ace_swepam_1h.json`의 `dsflag`와 status가 일치함(주최측 확인).
+- **status flag 0인 시간만 채점.** 0이 아닌 flag, fill(−9999.9), 비물리적 속도는 모든 팀에서 결측 처리, 보간 없음(잠정 정책, 시작 전 확정 공지 예정). 추론 입력에는 flag 제한 없음.
+- **예측값이 빠진 시간은 persistence로 대체되어 채점됨**: 실행 실패·시간 초과, null/NaN/비숫자, 0–10,000 km/s 밖, 72개가 아닌 경우 모두. 빠진 주기를 피한다고 점수가 좋아지지 않음.
+- **정렬: `obs[t0, τ] = v(t0 + τ)`** — 예보 τ번째 값은 `time_tag`가 t0+τ인 행(= 구간 [t0+τ, t0+τ+1))과 비교(공식 채점기 `swp_scoring/core/grid.py`로 확인, 2026-11-15) → 우리 `LABEL_SHIFT_H = 1`이 맞음. 단 Slack 시트에서는 같은 질문(#18, #19 Part 3)이 아직 Open/In Progress.
+- **지표 TIMSE (S_final, 낮을수록 좋음)**: lead τ = 1…72마다 전체 주기의 예측을 모아 `RMSE_τ`와 `TRMSE_τ`(관측 속도 분위수 기준 가중 — 빠른 태양풍 오차에 가중, 임계값은 관측값의 분위수 100구간·`numpy.quantile` linear, 모든 팀 동일)를 구하고 `S_τ = √(RMSE_τ · TRMSE_τ)`, **S_final = S_τ의 72개 산술평균**(모든 lead 동일 가중). 임계값은 live 중 계속 변하고 최종 예보 3일 뒤 고정.
+- **공식 채점 코드**: starter kit `scoring_demo/`(`score.py`, live와 같은 `swp_scoring/`). 입력 `{"name":…, "forecasts": {"<t0>": {"forecast_speed_kms": [72개]}}}`. `--start/--end`로 구간, `--live`로 NASA에서 정답 받기, `--official-baselines`로 공식 baseline 3종 동시 채점. 공식 baseline: persistence(t0 이하 마지막 유효 관측), recurrence_27d(27일 전 값), climatology(469.5 km/s 고정).
+- 참고(데모 구간 2026-07-01~09-27, 356주기): S_final recurrence_27d **93.5** / climatology 106.5 / persistence 107.8. persistence는 첫날 최고·3일째 최악(S_τ 1h 약 20 km/s), RMSE는 낮아도 TRMSE가 높음(빠른 흐름을 놓침).
 
 ## 5. 데이터 소스 (2026-11-08 실측 확정)
 
@@ -212,7 +220,7 @@ predict.py
 
 ## 9. 남은 작업
 
-(2026-11-12 기준. 마감 2026-11-19 23:59:59 UTC = KST 11-20 08:59까지 약 8일. 마지막 제출은 재제출 여유를 두고 KST 11-17경까지)
+(2026-11-15 기준. 마감 2026-11-19 23:59:59 UTC = KST 11-20 08:59까지 약 4일. 마지막 제출은 주최측 권장 11-19 18:00 UTC보다 이르게, KST 11-18경까지)
 
 **완료**
 - ~~모델 수령·연결~~ / ~~`5a7dffa`·`909af51` 반영~~ / ~~72개 변환(KI)~~ / ~~공개 시각 컷오프 필터~~ / ~~제출 README~~ / ~~`submit_real.py`~~
@@ -220,9 +228,16 @@ predict.py
 - ~~dry run에서 나온 문제 수정~~ (`bf45c55`: workers 6, 503 backoff, 선다운로드 slot 기준)
 
 **진행 중 / 다음 작업**
-1. [ ] **재제출(`bf45c55`) 결과 확인** — 2026-11-12 KST 조회 시 `BUILDING`. `ELIGIBLE` 복귀 + 실행 로그에서 503이 사라졌는지, 선다운로드 후 추가 요청 0건인지 확인. 실패 시 이전 커밋(`826ed43` 상태)으로 되돌려 재제출.
-2. [ ] **주최측(Slack) 문의**: live 시작일 / live t0가 00·06·12·18 정각인지 / 예보 시각 t0+k가 정답 `time_tag`와 그대로 대응하는지(`LABEL_SHIFT_H`).
-3. [ ] **과거 t0 백테스트** (권장, 프리즈 전 유일한 성능 확인 수단): 최근 30일 t0 약 100개를 컨테이너로 실행(1회 약 1분) → ACE 실측과 시간별 MAE/RMSE. 비교: KI vs baseline(τ=48h, MAE 51.0) vs 지속 예보 vs 앞쪽 시간 baseline 혼합. 4–5일 이전 t0는 HMI NRT가 삭제돼 확정본 사용(컷오프 필터의 확정본 LAG 규칙 적용).
+1. [x] ~~재제출(`bf45c55`) 결과 확인~~ → **`ELIGIBLE`** (11-11 16:18 UTC dry run: pull 17초 + run 80초, 우리 프로세스 55.1초, FITS 123장, 선다운로드 후 추가 요청 0건, 503은 90 → 18건이고 전부 재시도로 복구, 값은 첫 제출·로컬과 일치). 여유를 더 두려면 workers 4 — 다음 재제출 때 같이.
+2. [x] ~~주최측 문의 사항~~ → Slack 시트에서 확인(§11): live 시작 11-20 00:00 UTC, t0 항상 정각. 시간 라벨은 시트상 미답변이지만 공식 채점 코드로 확인(§4).
+3. [x] ~~과거 t0 백테스트~~ → **완료 (2026-11-15). 결론: 현재 제출본(`bf45c55`, KI) 유지, baseline 혼합 불필요.**
+   - 방법: 제출 이미지로 2026-10-16 00:00 ~ 11-12 18:00의 **112주기**(00/06/12/18 UTC) 실행 → **공식 채점기**(`scoring_demo/score.py --live --official-baselines`). 112주기 모두 stage `model`, state OK(fallback 0건). lead당 유효 쌍 약 89개(관측의 약 20%는 status ≠ 0 등으로 제외). 학습 자료 종료(2026-09-20) 이후 기간이라 표본 외 평가.
+   - **S_final (낮을수록 좋음)**: 제출본 **71.64** (RMSE 54.8 / TRMSE 94.8 / bias +4.7) | 우리 baseline τ=48h 107.08 | 공식 recurrence_27d 130.07 | 공식 persistence 131.60 | 공식 climatology 149.54.
+   - 변형 비교: KI shift 0(한 칸 안 밂) 72.58 → **shift 1이 더 좋음**. baseline → 모델 혼합 exp 6/12/24/48 = 72.15 / 73.57 / 77.59 / 84.61, 50:50 = 87.20 → **섞을수록 나빠짐**. 직전 1시간 값에서 KI로 넘어가는 혼합(exp 2/3/6) = 71.52 / 71.48 / 71.58 → 이득 0.2 이하(잡음 수준, 재제출 가치 없음).
+   - lead별 S(제출본 vs 공식 persistence): 1h 22.9 vs 22.2, 6h 42.4 vs 37.9, 12h 56.5 vs 68.2, 24h 71.1 vs 107.8, 48h 85.4 vs 181.1, 72h 86.6 vs 215.7. 앞쪽 6시간은 persistence(공식판은 t0 시각 행까지 봄)와 비슷하거나 조금 뒤지고, 12h부터 크게 앞섬. 미래 정보 누수 징후 없음.
+   - 한계: 28일·112주기로 짧음(TRMSE는 빠른 흐름 몇 번에 크게 움직임). 4–5일 이전 t0는 HMI NRT가 삭제돼 확정본 + LAG 규칙 사용(live보다 조금 오래된 영상). 실행 중 JSOC 503은 주기당 0–18건, 모두 복구.
+   - 보관: `Syzygy/backtest/` — `bt_driver.py`(이어서 실행 가능), `bt_eval.py`, `runs/<t0>.json`(주기별 컨테이너 출력), `forecasts/*.json`(채점기 입력), `report_20261016_20261112.json`. 채점기는 `Trillium-Technologies/benchlab-starter-kit`의 `scoring_demo/`(scratchpad에 클론, `bt_eval.py`의 경로 수정 필요).
+3-1. [ ] **참가 약관 서명**: 팀 리더 메일로 Adobe Sign 안내가 왔는지 확인, 팀원 전원 서명(미서명 시 제출 취소 가능).
 4. [ ] §10 결정 대기 항목 반영 후 필요 시 최종 재제출 (라벨 규칙, baseline 혼합 여부, PFSS 부분 다운로드, 자원 선언)
 5. [ ] 모델 코드가 또 바뀌면: `python tools/sync_model.py <git_repo>` → 변경 파일 확인 → 재빌드 → `test_local.sh` → `submit_real.py check`
 6. [ ] `ELIGIBLE` 확정 버전의 ZIP 보관 (`submission_real.zip`은 실행할 때마다 덮어씀. 기존 `submission_B/C.zip`·`kit.zip`은 사용자가 삭제함 — 제출 버전은 git 커밋으로 재현 가능)
@@ -231,10 +246,30 @@ predict.py
 
 - ~~원본 `config.py`, 빠진 모듈, 체크포인트~~ → `git_repo`로 수령 (2026-11-10).
 - ~~72개 변환 규칙~~ → 팀원 `909af51` KI 규칙으로 해결 (2026-11-12 반영).
-- **시간 라벨 (결정 필요)**: 현재 `LABEL_SHIFT_H = 1`(정답 `time_tag` = 시간의 시작, 실측 근거 §7). 팀원 정의(k번째 = 끝 시각 t0+k)를 그대로 쓰려면 0. 차이는 보간값 1시간 이동(시간당 수 km/s 이하). 주최측 확인 시 확정.
+- ~~시간 라벨~~ → `LABEL_SHIFT_H = 1` 유지. 공식 채점기가 `obs[t0, τ] = v(t0 + τ)`(§4). Slack 시트의 같은 질문(#18, #19 Part 3)은 아직 미답변이라 답이 다르게 나오면 재검토.
 - 팀원에게 추가 요청: ① 11-04 12:00 live 실행의 `features/live_images/*.npy`·`hmi_index.csv`·`forecast_20261104T1200_live.json`·`reports/live_input_check.json`·`inference_check.json` (컨테이너 결과 비트 대조용) ② **archive 예측**(과거 t0별 g01·router 16 bin·final·v_now, 변환 규칙 백테스트용) ③ ~~시간별 72개 변환 규칙~~(해결) ④ 추가 수정 예정분(H96 채택 여부 포함 — 채택 시 코드·가중치 필요) ⑤ (선택) Router **R0** 가중치 — 로컬 실측상 PFSS 시간 문제 작아 우선순위 낮음.
 - 사용자 결정 대기: ① Python **3.12-slim** 사용 확인 (§2 템플릿은 3.11, 팀원 개발 3.12.3) ② PFSS용 HMI 부분 다운로드 시 그대로 계산(현재) vs 일정 비율 미만이면 G01 fallback ③ 자원 4 vCPU / 16 GB 유지(권장, 실측 최대 1.08 GB) vs 축소.
-- `forecast[k]`와 ACE 시간 라벨의 정확한 대응 — SWPC `time_tag`는 시작 시각으로 실측 확인(2026-11-11). Benchlab이 forecast 시각을 `time_tag`에 그대로 맞추는지는 주최측 확인 필요.
-- 품질 플래그 처리 방식, **live 시작일**(문서·웹 검색으로 확인 안 됨, 주최측 공지 대기), live t0 격자(dry run은 16:00이었음).
+- ~~live 시작일·t0 격자~~ → 확정(§0, §11). 품질 플래그는 status 0만 채점(잠정, 시작 전 확정 공지 예정).
+- 주최측 미답변(시트 Open): SEP 오염 S=0 시간의 사후 보정 여부(#31), 플랫폼 장애 시 점수 처리(D #1), 리더보드 세부 표시(#29), ACE 결측 시 IMAP/SOLAR-1 대체(#28).
 - 최종 Participation Terms 전문 (6.2–6.8절).
 - ~~conformance 완료 여부~~ → **완료** (커밋 0534dfd). ~~팀명~~ → `Syzygy` (`.team`).
+
+## 11. 주최측 Q&A 요약 (Slack `#benchlab-support-and-q` + `Benchlab_Questions_A_to_F.xlsx`, 2026-11-15 확인)
+
+읽은 범위: 채널 최근 메시지, 시트 B·C·D·E·F 탭. **A 탭(Network & Egress)과 스레드 댓글은 미확인.** 시트는 계속 갱신되는 문서.
+
+**일정·제출 (C, B, F 탭)**
+- 첫 채점 예보 t0 = **2026-11-20 00:00 UTC**(프리즈 후 첫 주기, 11-19 당일은 채점 없음). 마지막 t0 = **2027-02-11 18:00 UTC**, 3일 뒤 관측이 모이면 최종 채점. 주기는 항상 00/06/12/18 UTC 정각, 재시도해도 같은 t0. **dry run만 예외**(업로드 시각의 정시).
+- 업로드 마감 11-19 23:59:59 UTC. 업로드마다 이전 것을 대체하고 자체 빌드 + dry run을 통과해야 함. **마감 시점의 최신 업로드가 `ELIGIBLE`이 아니면 live 불참.** 소형 이미지는 업로드 → ELIGIBLE 약 5–10분. 권장: 11-19 18:00 UTC까지.
+- 프리즈 후 모델 수정 불가. 예외는 우리 잘못이 아닌 공개 데이터 소스 장애로 파이프라인을 고쳐야 하는 기술적 경우뿐(약관 최종본 예정). 모델 drift 대응은 불가.
+- 이미지는 제출 시 한 번만 빌드, 이후 매 주기 재사용. 이미지 pull은 15분 제한에 포함, 네트워크 20 GB 한도에는 미포함.
+- `OUTPUT_POST`는 일회용이 아님 — 재시도 가능, 여러 번 도착하면 가장 최근 것이 채점됨.
+- live 중에도 실행 로그는 포털에서 계속 확인 가능(stdout이 그대로 기록됨). `recent_runs`의 `output_bytes`를 로컬 파일 크기와 비교 가능. 올라간 예보를 보려면 컨테이너가 forecast를 stdout에 찍으면 됨(주최측 권장 방법).
+- 큰 ZIP(188·253 MB) 업로드가 빌드를 시작하지 못하던 문제는 주최측 버그(업로드 검사 단계 OOM)였고 수정됨. 우리(36 MB)는 영향 없었음.
+- 공식 제출 스크립트 `submit_submission.sh`가 starter kit에 추가됨(우리 `submit_real.py`와 같은 역할). 같은 포털 링크 사용.
+- **참가 약관**: 팀원 전원 서명 필요(Adobe Sign, 팀 리더에게 안내 예정). 서명은 빌드·dry run을 막지 않지만 미서명 시 제출 취소·팀 제외 가능.
+
+**채점·데이터 (E 탭)** — 지표·정렬·flag는 §4에 정리.
+- 리더보드: benchlab.live(데모 `benchlab.live/leaderboard-demo`), Predictions / Rankings / History 탭, 정답·baseline·팀 비교. 첫 결과는 시작 3일 뒤. live 리더보드는 그 시점 ACE 자료 기준이라 수정에 따라 조금씩 변함. 상금 순위는 최종 채점만.
+- DONKI 등 공개 소스 허용(API 키 가능), 단 t0에 실제로 공개돼 있던 값만. 팀이 운영하는 원자료 보관소는 `declared_domains`에 선언(Native 트랙 분류는 검토 중).
+- 11-13 drop-in 세션 녹화본 링크가 채널에 있음.
