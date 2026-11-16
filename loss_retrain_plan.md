@@ -6,6 +6,7 @@
 - 백테스트에서 오차를 키우는 쪽은 TRMSE입니다(RMSE 54.8, TRMSE 94.8).
 - 제안: **구조, 입력, 출력(4개 + KI 보간)은 그대로 두고 loss와 선택 기준만 바꿉니다.**
 - MSE와 TRMSE 사이의 비율(α)은 손으로 정하지 않습니다. **학습 중에 S의 기울기에서 자동으로 계산**합니다(4.3절).
+- **G01과 Router의 결합 비율(현재 0.5 고정)도 S 기준으로 다시 정합니다**(4.5절). 백테스트에서는 Router 비중을 높일수록 S가 좋아지는 경향이 보였습니다.
 - 출력 형태 변경(H96 직접 출력)은 RMSE 기준 비교에서 KI와 동률이었으므로(valid 62.02 vs 62.15, test 63.41 vs 63.18) 이번에는 다루지 않습니다.
 
 ## 2. 배경: 대회 채점 방식
@@ -148,6 +149,7 @@ class AdaptiveSLoss(torch.nn.Module):
             return (b / (a + b)).cpu().numpy()
 ```
 
+- `n_horizon`은 출력 개수입니다. G01은 4(24/48/72/96h), RegimeNetCF는 16(6h bin)입니다.
 - **epoch마다 `alpha()`를 로그로 남겨 주세요.** 학습 중 α가 어떻게 움직였는지 확인용입니다.
 - 학습 초반에는 오차가 커서 계수가 불안정할 수 있습니다. 처음 1~2 epoch는 기존 `rmse_loss`로 warmup 후 전환하거나, 기존 checkpoint에서 fine-tuning으로 시작해도 됩니다.
 
@@ -164,15 +166,59 @@ class AdaptiveSLoss(torch.nn.Module):
 
 **비교 기준선:** 같은 조건에서 고정 α 0.25(`(1−α)·MSE + α·TMSE`)도 한 번 돌려 주세요. adaptive α가 고정값보다 나은지 확인하기 위해서입니다.
 
+### 4.5 G01 + Router 결합 비율 학습
+
+현재 최종 모델은 base **C** = `0.5·G01 + 0.5·Router`(고정)입니다. 사전등록에는 학습형 base **D** = `(1 − w)·G01 + w·Router`(train OOF RMSE 최소, w = 0.75)도 있었지만, 제약(Slow RMSE ≤ G01 + 2, V1 FAR ≤ G01 + 0.05)을 넘지 못해 C가 선택됐습니다(`final_selection.json` `log.step1`: D 전체 RMSE 63.46, C 64.10).
+
+**백테스트 참고 (2026-10-16 ~ 11-12, 112주기, 공식 채점기)**: 결합 비율만 바꾸고 나머지(보정량, KI, `[1:73]`)는 실행 결과 그대로 둔 근사 계산입니다. w = 0.5에서 제출본을 0.013 km/s 안으로 재현합니다.
+
+| w_router | 0.0 | 0.3 | 0.5 (현재) | 0.7 | 0.8 | 0.9 | 1.0 |
+|---|---|---|---|---|---|---|---|
+| S_final | 77.32 | 73.40 | 71.63 | 70.57 | 70.31 | **70.23** | 70.33 |
+| RMSE | 57.52 | 55.33 | 54.77 | 54.99 | 55.37 | 55.95 | 56.69 |
+| TRMSE | 104.85 | 98.46 | 94.81 | 91.73 | 90.43 | 89.29 | 88.33 |
+| bias | +1.3 | +3.4 | +4.8 | +6.1 | +6.8 | +7.5 | +8.2 |
+
+- Router 비중을 높이면 **TRMSE가 꾸준히 줄고**, RMSE는 0.5~0.7까지 거의 같다가 그 뒤로 나빠집니다. S 기준 최적은 0.8~0.9 근처입니다.
+- 방향은 팀원의 D(w = 0.75, RMSE 기준)와 같습니다. 대회 지표에서는 Router 쪽이 빠른 바람을 더 잘 잡는다는 뜻으로 보입니다.
+- 112주기는 짧고 보정량을 고정한 근사라, **선택 근거가 아니라 방향 확인용**입니다.
+
+**학습 방법 (권장 순서)**
+
+1. **단일 w**: w ∈ {0, 0.05, …, 1}, 목적 = train OOF의 S(대회 형식). validation S로 확인. 보정 강도 α_corr ∈ {0, 0.25, 0.5, 1}과 **같이** 탐색합니다(보정은 결합 뒤에 적용되므로 따로 고르면 최적이 어긋남).
+2. **horizon별 w_h (4개)**: 같은 방식으로 horizon마다. 먼 horizon일수록 Router 비중이 커질 가능성이 있습니다. 파라미터가 4개뿐이라 과적합 위험은 작습니다.
+3. **입력 의존 gate (선택)**: `w(x) = sigmoid(a_h + b·p_occ + c·P_HSS(Router) + d·(v_now − 430)/100)`. train OOF로 `AdaptiveSLoss`를 써서 적합, validation S로 확인. 빠른 바람 신호가 강할 때만 Router 쪽으로 기우는 형태입니다. 1·2단계보다 확실히 좋을 때만 채택합니다.
+
+- 구현 위치: 기존 D 탐색은 `fc_analysis.py`에 있습니다. 목적 함수만 RMSE → S(6절 형식)로 바꾸고, 보정 강도 탐색을 같은 반복 안에 넣으면 1·2번이 됩니다.
+- 3번 gate 적합 예시 (결합 뒤 보정은 고정해 두고 gate만 학습):
+
+```python
+gate = torch.nn.Linear(3, 4)                                   # 입력 3개 → horizon 4개의 로짓
+torch.nn.init.zeros_(gate.weight); torch.nn.init.constant_(gate.bias, 0.0)   # 시작점 w = 0.5 (현재 C)
+lossf = AdaptiveSLoss(w_fn, n_horizon=4)                       # 4.3절 클래스 그대로
+opt = torch.optim.Adam(gate.parameters(), 1e-2)
+# x: [N, 3] = [p_occ 평균, Router P_HSS 평균, (v_now − 430)/100],  g, r, y: [N, 4] (km/s, y 결측 NaN)
+for step in range(2000):
+    i = torch.randint(0, len(x), (512,))
+    w = torch.sigmoid(gate(x[i]))
+    v = (1 - w) * g[i] + w * r[i]
+    loss = lossf((v - 430) / 100, (y[i] - 430) / 100)         # AdaptiveSLoss 는 정규화 단위를 받음
+    opt.zero_grad(); loss.backward(); opt.step()
+```
+
+- 적합 자료: Router OOF는 seed 42–44만 있으므로(사전등록 `image_oof_seeds`) G01 OOF도 같은 seed 평균으로 맞춥니다.
+- 기존 제약(Slow RMSE, V1 FAR)은 계속 보고하되, 채택 기준은 validation S입니다. 제약을 유지할지는 팀에서 결정해 주세요.
+- 5절의 재학습 단계(1 G01, 2 RegimeNetCF)를 거친 뒤에는 새 예측으로 **다시** 적합합니다(5절 4단계).
+
 ## 5. 실험 계획
 
 출력은 **4 horizon(24/48/72/96h 6시간 평균) + KI 보간 그대로**입니다. 가중치 표는 4개 horizon 정답(train, 6h 평균)을 모두 모아 하나로 만듭니다.
 
 | 단계 | 내용 | 비용 | 진행 조건 |
 |---|---|---|---|
-| **0** | 재학습 없이 결합 비율 w(현재 0.5)와 보정 강도(현재 0.25)를 **validation S**로 다시 선택 | 분 단위 | — |
+| **0** | 재학습 없이 결합 비율(4.5절 1→2→3)과 보정 강도(현재 0.25)를 **같이** S로 다시 선택 | 분 단위 | — |
 | **1** | **G01**을 `AdaptiveSLoss`로 재학습. 4.4절 탐색(seed 42) → 최적 조합 seed 42–46. 고정 α 0.25 비교 1회. checkpoint = validation S 최소 | CPU 가능 | — |
-| **2** | **RegimeNetCF** 속도 항(고속 가중 MSE)을 `AdaptiveSLoss`로 교체. CE 0.3, ΔV 0.5는 유지. gamma·w_cap은 1단계 최적값 사용 | GPU | 1단계에서 validation S 개선 |
+| **2** | **RegimeNetCF** 속도 항(고속 가중 MSE)을 `AdaptiveSLoss`(`n_horizon=16`)로 교체: `code/05_train.py` `regime_loss`(807행)의 `loss_v = weighted_mse(out["v"], y, w)`. CE 0.3, ΔV 0.5(`loss_exp`, 같은 고속 가중 `w` 사용)는 처음에는 유지. gamma·w_cap은 1단계 최적값 사용 | GPU | 1단계에서 validation S 개선 |
 | **3** | Router: loss는 그대로, checkpoint만 validation S 기준으로 다시 선택 (새 RegimeNetCF head 기준) | GPU 또는 재선택만 | 2단계 진행 시 |
 | **4** | BoxCox 맵(A/C)을 새 OOF 예측으로 다시 적합 → 결합 비율·보정 강도를 validation S로 재선택 | 분 단위 | 1~3단계 후 항상 |
 
@@ -199,6 +245,7 @@ class AdaptiveSLoss(torch.nn.Module):
 
 1. 표: 단계별 validation / test의 **S_final, RMSE, TRMSE, bias** (lead별 S 곡선 포함하면 더 좋음). 1단계는 adaptive α와 고정 α 0.25 비교 포함
 2. 학습 중 horizon별 α 변화 로그
-3. 최종 선택값: gamma, w_cap, 결합 비율, 보정 강도, seed별 checkpoint 경로
-4. 새 가중치와 설정 파일이 들어간 커밋. 파일 경로가 바뀌면 알려 주세요(Docker 쪽 `tools/sync_model.py`가 `final_selection.json`, `preds_info.json`, router meta에서 경로를 찾습니다).
-5. 단계 0 결과만이라도 먼저 공유해 주면 효과 크기를 빨리 가늠할 수 있습니다.
+3. 결합 비율 결과: 단일 w 곡선(w별 S·RMSE·TRMSE), horizon별 w_h, gate를 시도했다면 그 결과와 계수
+4. 최종 선택값: gamma, w_cap, 결합 비율, 보정 강도, seed별 checkpoint 경로
+5. 새 가중치와 설정 파일이 들어간 커밋. 파일 경로가 바뀌면 알려 주세요(Docker 쪽 `tools/sync_model.py`가 `final_selection.json`, `preds_info.json`, router meta에서 경로를 찾습니다). horizon별 w나 gate를 채택하면 `fc_predict.py`의 결합 부분(base 선택, 504행 근처)도 바뀌어야 합니다.
+6. 단계 0 결과만이라도 먼저 공유해 주면 효과 크기를 빨리 가늠할 수 있습니다.

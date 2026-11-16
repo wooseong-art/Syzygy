@@ -247,12 +247,18 @@ predict.py
 5. [ ] 모델 코드가 또 바뀌면: `python tools/sync_model.py <git_repo>` → 변경 파일 확인 → 재빌드 → `test_local.sh` → `submit_real.py check`
 6. [ ] `ELIGIBLE` 확정 버전의 ZIP 보관 (`submission_real.zip`은 실행할 때마다 덮어씀. 기존 `submission_B/C.zip`·`kit.zip`은 사용자가 삭제함 — 제출 버전은 git 커밋으로 재현 가능)
 7. [ ] **live 기간 운영** (11-20 ~ 2027-02): 포털은 실행 상태만(`submit_real.py status`), 점수는 benchlab.live(첫 순위 11-23경, 72h 관측이 모여야 채점). 로그 링크는 1시간 유효·최근 실행만 보이므로 `submit_real.py logs`로 주기적으로 받아 둘 것(대회 뒤 오차 분석 자료). 자동 저장 스크립트는 제안만 함(미작성).
-8. [ ] **대회 뒤 개선 실험 — 팀원에게 전달할 문서 `loss_retrain_plan.md`** (2026-11-16 작성, git 미추가). **이번 제출본은 변경하지 않음.**
+8. [ ] **대회 뒤 개선 실험 — 팀원에게 전달할 문서 `loss_retrain_plan.md`** (2026-11-16 작성·보완 완료, 팀원에게 그대로 전달 가능, git 미추가). **이번 제출본은 변경하지 않음**(D안은 9번에서 별도 결정).
    - 근거: 백테스트에서 TRMSE(94.8)가 RMSE(54.8)보다 훨씬 큼 → 빠른 바람 오차가 점수를 지배. 현재 학습·선택은 RMSE 중심(§6).
    - 내용: 구조·입력·출력(4개 + KI)은 그대로, **loss와 선택 기준만 S로**. TIMSE = train 고정 분위수로 만든 샘플 가중치 w(v)의 가중 MSE와 같음(공식 `timse_percentile`과 일치 확인). `AdaptiveSLoss`: horizon별 계수 a_τ = S_τ/(4·MSE_τ), b_τ = S_τ/(4·TMSE_τ)를 EMA 통계로 매 step 계산(no_grad) → α_τ = MSE/(MSE+TMSE) 자동(현재 수준 ≈ 0.25). α를 `nn.Parameter`로 학습하면 α → 0으로 무너지므로 금지. 남는 탐색 변수 gamma {0.5,1,2} × w_cap {0.98,0.99,0.995}(seed 42로 9회 → 최적 조합 seed 5개), 고정 α 0.25 비교 1회.
    - 단계: 0 재학습 없이 결합 비율·보정 강도를 validation S로 재선택 → 1 G01(CPU) → 2 RegimeNetCF(GPU) → 3 Router checkpoint 재선택 → 4 BoxCox 재적합·최종 재선택. 모든 선택은 대회 형식(KI → `hourly[1:73]`, 1h 정답)의 validation S.
    - 검증(2026-11-16, `swp-local` 이미지 안 torch 2.4.1, 합성 자료): 문서 코드 그대로 600 step 정상 학습, α 0.2대 → 0.3대로 서서히 변화, **기울기가 정확한 S 미분과 cosine 1.000000**. 실제 모델 효과는 미확인.
    - H96(1h 직접 출력)은 RMSE 기준 KI와 동률이라 이번 실험에서 제외. S loss에서 효과가 보이면 그때 비교.
+   - **결합 비율(문서 4.5절, 2026-11-16 추가)**: G01 + Router 비율도 S로 재선택. 순서 ① 단일 w(0–1, 0.05 간격, 보정 강도 {0, 0.25, 0.5, 1}과 동시 탐색) → ② horizon별 w_h 4개 → ③ 입력 의존 gate `w(x) = sigmoid(a_h + b·p_occ + c·P_HSS(Router) + d·(v_now−430)/100)`를 train OOF에 `AdaptiveSLoss`로 적합(선택). 결합 비율은 backprop 학습이 아니라 예측 위에서 탐색 — 0단계(지금 예측)와 4단계(재학습 후) 두 번. 구현 위치: 기존 D 탐색 `fc_analysis.py`, RegimeNetCF loss는 `code/05_train.py` `regime_loss` 807행 `loss_v`. Router OOF는 seed 42–44만.
+   - 문서 코드 3블록(가중치 표, `AdaptiveSLoss`, gate) 모두 Docker에서 문서 그대로 실행 확인. gate는 w = 0.5에서 출발해 p_occ > 0.5일 때 0.77, < 0.2일 때 0.39로 학습(합성 자료).
+9. [ ] **결합 비율 D안 반영 여부 (결정 대기, 마감 11-19 걸림)**
+   - 팀원 코드에 base 4종: A = G01, B = Router, **C = 0.5·G01 + 0.5·Router(현재)**, **D = (1−w)·G01 + w·Router, w = 0.75**(train OOF RMSE 최소, `final_selection.json`의 `"w": 0.75`). D는 RMSE 63.46 < C 64.10이었지만 제약(Slow RMSE ≤ G01 + 2, V1 FAR ≤ G01 + 0.05) 미충족으로 C 선택(`log.step1`). **`final_selection.json`의 `"base": "C"` → `"D"`로 바꾸면 재학습 없이 동작**(`fc_predict.py` 504행).
+   - 백테스트(112주기, 공식 채점기, 결합 비율만 바꾸고 보정량은 실행값 고정한 근사, w = 0.5가 제출본을 0.013 km/s 안으로 재현): w_router 0.0 / 0.3 / **0.5** / 0.7 / 0.8 / 0.9 / 1.0 → S 77.32 / 73.40 / **71.63** / 70.57 / 70.31 / **70.23** / 70.33. Router 비중↑ → TRMSE 꾸준히↓(94.8 → 88.3), RMSE는 0.7까지 비슷하다 이후↑, bias +4.8 → +8.2. 보관: `backtest/bt_blend.py`(채점기 경로는 scratchpad 기준, `bt_eval.py`처럼 수정 필요), `backtest/report_blend_20261016_20261112.json`.
+   - 판단: 근거가 28일뿐 + 팀원이 제약으로 뺀 이유 미확인 → **팀원에게 D 탈락 사유 확인 후 결정**. 반영 시 작업: 설정 한 줄(팀원 레포 커밋 → sync 또는 runner 패치) → 재빌드 → `test_local.sh` → 재제출(사용자가 실행). 미결정이면 현재 C 유지.
 
 ## 10. 미확정 / 확인 필요
 
@@ -260,6 +266,7 @@ predict.py
 - ~~72개 변환 규칙~~ → 팀원 `909af51` KI 규칙으로 해결 (2026-11-12 반영).
 - ~~시간 라벨~~ → `LABEL_SHIFT_H = 1` 유지. 공식 채점기가 `obs[t0, τ] = v(t0 + τ)`(§4). Slack 시트의 같은 질문(#18, #19 Part 3)은 아직 미답변이라 답이 다르게 나오면 재검토.
 - 팀원에게 추가 요청: ① 11-04 12:00 live 실행의 `features/live_images/*.npy`·`hmi_index.csv`·`forecast_20261104T1200_live.json`·`reports/live_input_check.json`·`inference_check.json` (컨테이너 결과 비트 대조용) ② **archive 예측**(과거 t0별 g01·router 16 bin·final·v_now, 변환 규칙 백테스트용) ③ ~~시간별 72개 변환 규칙~~(해결) ④ 추가 수정 예정분(H96 채택 여부 포함 — 채택 시 코드·가중치 필요) ⑤ (선택) Router **R0** 가중치 — 로컬 실측상 PFSS 시간 문제 작아 우선순위 낮음.
+- **결합 비율 D안(Router 0.75)을 이번 제출에 반영할지** — 팀원에게 D 탈락 사유(어느 제약을 얼마나 넘었는지) 확인 필요(§9-9).
 - 사용자 결정 대기: ① Python **3.12-slim** 사용 확인 (§2 템플릿은 3.11, 팀원 개발 3.12.3) ② PFSS용 HMI 부분 다운로드 시 그대로 계산(현재) vs 일정 비율 미만이면 G01 fallback ③ 자원 4 vCPU / 16 GB 유지(권장, 실측 최대 1.08 GB) vs 축소.
 - ~~live 시작일·t0 격자~~ → 확정(§0, §11). 품질 플래그는 status 0만 채점(잠정, 시작 전 확정 공지 예정).
 - 주최측 미답변(시트 Open): SEP 오염 S=0 시간의 사후 보정 여부(#31), 플랫폼 장애 시 점수 처리(D #1), 리더보드 세부 표시(#29), ACE 결측 시 IMAP/SOLAR-1 대체(#28).
