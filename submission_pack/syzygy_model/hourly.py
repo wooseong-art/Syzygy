@@ -35,3 +35,29 @@ def to_hourly(res, ace_hourly, t0):
         return None, "non-finite hourly values"
     return vals, dict(rule=RULE, label_shift_h=LABEL_SHIFT_H, hourly_model=res.get("hourly_model"),
                       final_model=res.get("final_model"), state=status.get("state"))
+
+
+# ---- two-model switch (2026-11-18) -------------------------------------------------------------------
+# Both weight sets of git_repo 8fb7432 run on the same inputs: "original" (= the 909af51 model, better in
+# slow wind) and "sloss" (S-loss retrain, better in fast wind / rises, biased high in slow wind).
+# Per hour j: ref = (orig[j] + sloss[j]) / 2; use sloss[j] if ref >= SWITCH_KMS else orig[j].
+# The rule uses only the two forecasts (never observations after t0). Threshold chosen on the official-scorer
+# backtest 2026-10-16…11-12 (112 cycles): S_final orig 71.65 / sloss 69.17 / switch@450 68.35; picking the
+# threshold on one half and scoring the other half gave 450 both times and beat sloss alone both times.
+SWITCH_KMS = 450.0
+
+
+def combine(orig, sloss, threshold=SWITCH_KMS):
+    """orig, sloss: 72 floats or None. Return (72 floats or None, info)."""
+    if orig is None and sloss is None:
+        return None, dict(rule="none available")
+    if orig is None or sloss is None:
+        only = "sloss" if orig is None else "original"
+        return list(sloss if orig is None else orig), dict(rule=f"single model ({only}); other unavailable", used=only)
+    out, n_s = [], 0
+    for a, b in zip(orig, sloss):
+        use_s = (a + b) / 2.0 >= threshold
+        n_s += use_s
+        out.append(b if use_s else a)
+    return out, dict(rule=f"switch: sloss if (orig+sloss)/2 >= {threshold:g} km/s else original",
+                     threshold_kms=threshold, hours_sloss=n_s, hours_original=len(out) - n_s)

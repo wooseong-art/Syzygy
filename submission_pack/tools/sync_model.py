@@ -128,6 +128,13 @@ def data_files(src):
         out += [local(info[f"{k}|{s}"]["ckpt"]) for k in ("G4x3", "P2o_4x3")]
         out.append(f"{HSSON}/checkpoints/O_seed{s}/best.pt")
         out.append(f"{HSSON}/checkpoints/{'GRID_T2_lam0.1_beta0.0_seed42' if s == 42 else f'T2_seed{s}'}/best.pt")
+    # 8fb7432+: weights="sloss" (S-loss retrain) reads its own selection + checkpoints listed in deploy_selection.json
+    dep_rel = f"{EXP_FINAL}/sloss/configs/deploy_selection.json"
+    if (src / dep_rel).exists():
+        dep = rd(dep_rel)
+        out += [dep_rel, f"{EXP_FINAL}/sloss/configs/prereg.json"]
+        for key in ("g01_ckpt", "regime_ckpt", "router_ckpt", "boxcox_maps"):
+            out += [f"{EXP_FINAL}/{p}" for p in dep[key].values()]
     return out
 
 

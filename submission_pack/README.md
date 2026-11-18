@@ -23,7 +23,7 @@ run.sh <t0>
   200–1200 km/s; non-finite values are replaced by 430 km/s. Extra keys `stage` and `info` record
   which stage produced the forecast; `info.model` holds the full model output and `info.fallback`
   the baseline summary.
-* Fallback order: full ensemble → G01 numeric model (images or PFSS unavailable) → baseline
+* Fallback order: two-model combination → single weight set → G01 numeric model (images or PFSS unavailable) → baseline
   (model failed, timed out, or ACE history empty) → climatology.
 * Time budget: 600 s for `predict.py` (a watchdog exits 0 with the best forecast written so far),
   180 s for ACE downloads. The model child process is killed at its deadline; image downloads stop
@@ -35,17 +35,37 @@ Trained offline (no retraining, no external computation at run time). Weights an
 unchanged from the team repository `wooseong-art/git_repo`; `model/MANIFEST.json` lists the source
 commit and the SHA-256 of every file.
 
+Two weight sets of the same networks are run on the same downloaded inputs:
+
+| weight set | training objective | ensemble |
+|---|---|---|
+| `original` | RMSE (G01) / high-speed-weighted MSE (RegimeNet-CF) | `v = 0.5·G01 + 0.5·Router`, `v_final = v + 0.25·p_occ·(BoxCox_C(v) − v)` |
+| `sloss` | the competition metric: per-lead `√(RMSE·TRMSE)` with fixed training-set speed quantiles | `v = 0.15·G01 + 0.85·Router`, `v_final = v + 1.0·p_occ·(BoxCox(v) − v)` |
+
 ```
-v        = 0.5 · mean_seed(G01) + 0.5 · mean_seed(Router R2)            5 seeds each
-Router_s = anchor_s + Σ softmax(router_s) · ΔV_s                        anchor, ΔV from RegimeNet-CF (same seed)
-v_final  = v + 0.25 · p_occ · (BoxCox_C(v) − v)                         p_occ = HSS occupancy probability (model O)
+Router_s = anchor_s + Σ softmax(router_s) · ΔV_s     anchor, ΔV from RegimeNet-CF (same seed), 5 seeds each
+p_occ    = HSS occupancy probability (model O)
 ```
 * G01: numeric network on ACE history (48 h, 27-day recurrence windows) and a 4×3 coronal-hole
   grid from AIA 193 + HMI. RegimeNet-CF / Router: CNN on AIA 193 + HMI images at t0 − 0/24/48/72/96 h,
   coronal-hole features, and PFSS expansion-factor features traced from a Carrington map built
   from the last 28 days of HMI magnetograms.
 * Native output: ACE 6 h mean speed over `[t0 + h − 6, t0 + h)` for h = 24/48/72/96. No CME inputs.
-* If any image or PFSS input is missing the model falls back to G01 alone (with its own Box–Cox map).
+* If any image or PFSS input is missing a weight set falls back to G01 alone (with its own Box–Cox map).
+
+### Combining the two weight sets
+
+Each weight set gives 72 hourly values (below). For every hour j the submitted value is
+
+```
+forecast[j] = sloss[j]     if (original[j] + sloss[j]) / 2 ≥ 450 km/s
+            = original[j]  otherwise
+```
+The rule uses only the two forecasts. `original` is more accurate in slow wind, `sloss` in fast
+wind and at high-speed-stream onsets. The 450 km/s threshold was chosen on a backtest of past
+cycles (2026-10-16 … 11-12) scored with the organisers' scorer. `sloss` runs first; if time runs out
+before `original` finishes, the `sloss` values are used alone (and vice versa if `sloss` fails).
+`info.model` records both forecasts (`forecast_sloss`, `forecast_original`) and the rule applied (`combine`).
 
 ### Hourly values
 
@@ -104,9 +124,9 @@ because JSOC replaces NRT files with definitive ones; the log shows which files 
 
 `public.ecr.aws/docker/library/python:3.12-slim` (the model was developed on Python 3.12) with
 torch 2.4.1 (CPU), numpy 2.2.0, pandas 2.2.3, scipy 1.15.2, h5py 3.16.0, astropy 7.1.0,
-sunpy 7.1.2, requests 2.32.5 (pinned in `requirements.txt`). Model weights: 30 files, about 40 MB,
-inside the image. Image size about 1.95 GiB. Runs as non-root user `runner`, writes only to `/tmp`.
-Measured locally: about 1 minute per run (120+ FITS files, about 130 MB, fetched in parallel),
+sunpy 7.1.2, requests 2.32.5 (pinned in `requirements.txt`). Model weights: 45 files (both sets; O, P2o, T2 shared), about 70 MB,
+inside the image. Image size about 2.2 GB. Runs as non-root user `runner`, writes only to `/tmp`.
+Measured locally: about 1–1.5 minutes per run (120+ FITS files, about 130 MB, fetched in parallel),
 peak memory about 1.1 GB.
 
 ## Local test

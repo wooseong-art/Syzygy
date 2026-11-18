@@ -15,6 +15,8 @@ Runtime patches (fc_predict.py and sw_utils.py stay byte-identical to git_repo):
   4. predict(..., monitor=False) → no writes to monitoring/ or predictions/
   5. astropy IERS auto-download off (would contact an undeclared host)
   6. sw_utils.list_dir          → hides JSOC files not yet published at t0 (listing mtime), see list_dir()
+Two models (2026-11-18): predict() runs with weights "sloss" then "original" on the same cached inputs and the
+72 hourly values are combined by hourly.combine (sloss where the mean forecast >= 450 km/s, else original).
 Prefetch: the candidate FITS for every image slot (ts − 12k h, k = 0…10, ts = floor(t0, 6 h), AIA 193 + HMI)
 and the PFSS HMI history ([ts − 28 d, ts − 2 h], newest first) are downloaded in parallel while the 30 networks load.
 fc_predict then runs exactly as written; its own sequential requests hit the in-memory cache.
@@ -36,6 +38,11 @@ CACHE = Path(os.environ.get("SYZYGY_CACHE", "/tmp/syzygy_cache"))
 WORKERS = int(os.environ.get("SYZYGY_DL_WORKERS", "6"))   # 12 made JSOC answer 503 from AWS (dry run 2026-11-11)
 HTTP_TIMEOUT_S = float(os.environ.get("SYZYGY_HTTP_TIMEOUT_S", "40"))
 COMPUTE_RESERVE_S = float(os.environ.get("SYZYGY_COMPUTE_RESERVE_S", "150"))   # kept for preprocessing + PFSS + nets
+# Two weight sets on the same downloaded inputs, combined per hour by hourly.combine (switch at 450 km/s).
+# sloss runs first: if time runs out it is the better single model (backtest S 69.17 vs 71.65).
+COMBINE = os.environ.get("SYZYGY_COMBINE", "switch")           # switch | sloss | original
+WEIGHT_SETS = {"switch": ("sloss", "original"), "sloss": ("sloss",), "original": ("original",)}[COMBINE]
+SECOND_MODEL_MIN_S = float(os.environ.get("SYZYGY_SECOND_MODEL_MIN_S", "60"))
 
 T_START = time.monotonic()
 _net_deadline = float("inf")
@@ -195,6 +202,27 @@ def warm(task, U, C):
     return "none"
 
 
+def _write(out_path, runs, prefetch):
+    """Combine whatever model runs finished (see hourly.combine) and write the result atomically."""
+    from syzygy_model.hourly import combine
+    get = lambda w: runs.get(w, (None, None, None))
+    fc_o, hi_o, res_o = get("original")
+    fc_s, hi_s, res_s = get("sloss")
+    if COMBINE == "switch":
+        forecast, cinfo = combine(fc_o, fc_s)
+    else:
+        forecast, cinfo = (fc_s if COMBINE == "sloss" else fc_o), dict(rule=f"single model ({COMBINE}, SYZYGY_COMBINE)")
+    main_res = res_s if res_s is not None else res_o
+    doc = {"forecast": forecast, "combine": cinfo, "hourly": hi_s if hi_s is not None else hi_o,
+           "result": main_res, "result_original": res_o,
+           "forecast_sloss": fc_s, "forecast_original": fc_o,
+           "prefetch": prefetch, "total_s": round(time.monotonic() - T_START, 1)}
+    tmp = out_path + ".tmp"
+    Path(tmp).write_text(json.dumps(doc, default=str), encoding="utf-8")
+    os.replace(tmp, out_path)
+    return doc
+
+
 def main(argv):
     global _net_deadline
     t0_s, ace_path, out_path, budget_s = argv[1], argv[2], argv[3], float(argv[4])
@@ -229,8 +257,8 @@ def main(argv):
     futs = [pool.submit(warm, tk, U, C) for tk in tasks]
     t_pf = time.monotonic()
 
-    FP._P = FP.Pipeline("cpu")
-    log("pipeline_loaded", init_s=round(FP._P.init_sec, 2))
+    FP._P = FP.Pipeline("cpu", WEIGHT_SETS[0])
+    log("pipeline_loaded", init_s=round(FP._P.init_sec, 2), weights=WEIGHT_SETS[0])
 
     pool.shutdown(wait=True)
     stats = {}
@@ -245,22 +273,31 @@ def main(argv):
     prefetch = dict(tasks=len(tasks), seconds=round(time.monotonic() - t_pf, 1), result=stats)
     log("prefetch_done", **prefetch)
 
-    t_pred = time.monotonic()
-    res = FP.predict(t0.strftime("%Y-%m-%dT%H:%M:%S"), {"mode": "live", "monitor": False, "allow_download": True})
-    log("predict_done", seconds=round(time.monotonic() - t_pred, 1), state=res["status"]["state"],
-        final_model=res["final_model"], final_speed_kms=res["final_speed_kms"], missing=res["status"]["missing_inputs"])
-
-    from syzygy_model.hourly import to_hourly
+    from syzygy_model.hourly import to_hourly, combine
     hours = json.loads(Path(ace_path).read_text(encoding="utf-8"))["hours"]
-    forecast, hourly_info = to_hourly(res, hours, t0)
-    res["status"]["download_log"] = f"{len(res['status']['download_log'])} entries (see stdout)"
-    doc = {"forecast": forecast, "hourly": hourly_info, "result": res, "prefetch": prefetch,
-           "total_s": round(time.monotonic() - T_START, 1)}
-    tmp = out_path + ".tmp"
-    Path(tmp).write_text(json.dumps(doc, default=str), encoding="utf-8")
-    os.replace(tmp, out_path)
-    log("model_done", total_s=doc["total_s"], hourly=hourly_info,
-        first=None if forecast is None else forecast[0], last=None if forecast is None else forecast[-1])
+    runs = {}                                    # weights -> (72 floats | None, hourly info, result)
+    for i, w in enumerate(WEIGHT_SETS):
+        left = deadline - time.monotonic()
+        if i and left < SECOND_MODEL_MIN_S:
+            log("predict_skipped", weights=w, reason=f"only {left:.0f}s left")
+            break
+        t_pred = time.monotonic()
+        try:
+            res = FP.predict(t0.strftime("%Y-%m-%dT%H:%M:%S"),
+                             {"mode": "live", "monitor": False, "allow_download": True, "weights": w})
+        except Exception:
+            log("predict_failed", weights=w, error=traceback.format_exc()[-2000:])
+            continue
+        log("predict_done", weights=w, seconds=round(time.monotonic() - t_pred, 1), state=res["status"]["state"],
+            final_model=res["final_model"], final_speed_kms=res["final_speed_kms"], missing=res["status"]["missing_inputs"])
+        fc, hinfo = to_hourly(res, hours, t0)
+        res["status"]["download_log"] = f"{len(res['status']['download_log'])} entries (see stdout)"
+        runs[w] = (fc, hinfo, res)
+        _write(out_path, runs, prefetch)         # keep a usable result even if the next model is killed
+    doc = _write(out_path, runs, prefetch)
+    log("model_done", total_s=doc["total_s"], combine=doc["combine"], hourly=doc["hourly"],
+        first=None if doc["forecast"] is None else doc["forecast"][0],
+        last=None if doc["forecast"] is None else doc["forecast"][-1])
     return 0
 
 

@@ -1,6 +1,6 @@
 {
  "source": "https://github.com/wooseong-art/git_repo",
- "commit": "909af51d0a413f59c203432b16a9bd3a16ba3f17",
+ "commit": "8fb7432dfc96bb1d7a7b7f5a56ebe8bd02e872ee",
  "files": [
   {
    "path": "code/04b_ch_features.py",
@@ -154,8 +154,8 @@
   },
   {
    "path": "code/experiments/syzygy_final_cme_free_2026/fc_predict.py",
-   "bytes": 38672,
-   "sha256": "267b8383ddfdcfed651d7a502d6e61f3e56afb78b25491459fb77134a5e6b2de"
+   "bytes": 40488,
+   "sha256": "a6c6eec35aa3e5d46d4202a91cefd5db2fc3898e62ab0a593c3389aa7eaf880c"
   },
   {
    "path": "code/model.py",
@@ -461,6 +461,101 @@
    "path": "code/experiments/hss_onset_conditional_calibration/checkpoints/T2_seed46/best.pt",
    "bytes": 536842,
    "sha256": "44dbe84d32bd43b16bf5a2e1a31cabf19c22990c102184c49035509123463895"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/configs/deploy_selection.json",
+   "bytes": 2037,
+   "sha256": "f974724bb31845e26dc1770748db24a6bb677e07e371fec600a71d1b96559323"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/configs/prereg.json",
+   "bytes": 6291,
+   "sha256": "7639aa969e8508088a05e47440cc902f488e4c4052ead8ae9d5e99669feeb1ab"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/g01/checkpoints/S_g1_c0.98_seed42/best.pt",
+   "bytes": 526870,
+   "sha256": "07ab83f14773b57d5a4474dd1ef5d7588ec2eba7b25ca98e8abfe93ce849baa3"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/g01/checkpoints/S1b_seed43/best.pt",
+   "bytes": 526870,
+   "sha256": "2913aac92d963ac7ff9e65d2ad32d494460d5467e39039f0bc2b2ed30ca4772d"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/g01/checkpoints/S1b_seed44/best.pt",
+   "bytes": 526870,
+   "sha256": "353014e22cb3e39734208fda06d85b6817c18ed063e31f031184c73a4e300cf6"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/g01/checkpoints/S1b_seed45/best.pt",
+   "bytes": 526870,
+   "sha256": "f6ac8e978537487d5ba103b76d8892d7c307a67c1f1ee4e819d99ed004935647"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/g01/checkpoints/S1b_seed46/best.pt",
+   "bytes": 526870,
+   "sha256": "3267a3e703ac0b2c118c476e4a28312deed4866b7dea0ef47be6cca5e31e3be3"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/regime/regime_cf_s42.pt",
+   "bytes": 2847662,
+   "sha256": "2f5efafe125514cbd2b55c7286ae9f6e5e97e61baf96211f10d6bf16040b8966"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/regime/regime_cf_s43.pt",
+   "bytes": 2847662,
+   "sha256": "e686b34e107501d0861f5b08d0f6d210374a5ce29bd3f6309f44bb14dc7aa345"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/regime/regime_cf_s44.pt",
+   "bytes": 2847662,
+   "sha256": "272cab99cb578f443edf90fe534bee846242edd54019d0913bb31b12584dd4cf"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/regime/regime_cf_s45.pt",
+   "bytes": 2847662,
+   "sha256": "19bbce2cb947d70122febc5714cd46584142d4c32d4941d59e5227826c86bd4c"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/regime/regime_cf_s46.pt",
+   "bytes": 2847662,
+   "sha256": "1e981e1a409d06ae15914960b2b7364bc6b1b2dcb03bb5899741767b3456b097"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/router/router_R2_s42.pt",
+   "bytes": 2804902,
+   "sha256": "2618881e9396b8f76af9e1ea1dddd04426e419e1b530737e5908941caeba385f"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/router/router_R2_s43.pt",
+   "bytes": 2804902,
+   "sha256": "a16af1d8c6bb678e4a3abd926e65f6d99aca2f6720272c6cedd1bd8ee4b12f54"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/router/router_R2_s44.pt",
+   "bytes": 2804902,
+   "sha256": "9d851270f8da14342fb0c1cffabc6da0d8c58afc681c67b971bc00c3fd7f95a7"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/router/router_R2_s45.pt",
+   "bytes": 2804902,
+   "sha256": "38f9cb774bf1d86fdc73a5a2b1ca31743d0b473a53b1256a494ef15e2210a10b"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/gpu/checkpoints/router/router_R2_s46.pt",
+   "bytes": 2804902,
+   "sha256": "befcbc27729657d72811091b3f1351102034e07d9ee6890b858eaebfc7d9d164"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/configs/boxcox_maps_D.pkl",
+   "bytes": 644,
+   "sha256": "fb36a0e2d9c68fa694fc3629cf95f4115e425bee26a0e73b71ac85feebddfe95"
+  },
+  {
+   "path": "code/experiments/syzygy_final_cme_free_2026/sloss/configs/boxcox_maps_A.pkl",
+   "bytes": 644,
+   "sha256": "7332f1c3e4dffc9a1585b650f6404fa9475265d16d17a490620cef5b7d6c0705"
   }
  ]
 }

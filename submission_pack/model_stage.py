@@ -43,7 +43,11 @@ def predict(t0, ace_hourly, deadline_monotonic, ace_source=None):
         rc = subprocess.run(cmd, cwd=str(APP), timeout=budget + 3).returncode
     except subprocess.TimeoutExpired:
         _log("stage_failed", stage="model", reason="timeout", elapsed_s=round(time.monotonic() - t, 1))
-        return None, {"error": "timeout"}
+        rc = "timeout"
+    if rc != 0 and out_path.exists():            # killed after the first of two models finished: use that
+        doc = json.loads(out_path.read_text(encoding="utf-8"))
+        _log("stage_partial", stage="model", reason=f"exit {rc}", combine=doc.get("combine"))
+        return doc.get("forecast"), doc
     if rc != 0 or not out_path.exists():
         _log("stage_failed", stage="model", reason=f"exit {rc}", elapsed_s=round(time.monotonic() - t, 1))
         return None, {"error": f"exit {rc}"}
