@@ -1,6 +1,6 @@
 # Benchlab Solar Wind Prediction — Docker 제출 작업 브리프
 
-> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-16.
+> Claude Code 세션 컨텍스트용. 최종 갱신 2026-11-18.
 > 출처: starter-kit 레포(`wooseong-art/Syzygy`, branch `starter-kit`; 원본 `Trillium-Technologies/benchlab-starter-kit`), Slack `#benchlab-support-and-q` + 고정 시트 `Benchlab_Questions_A_to_F.xlsx`(2026-11-15 확인, §11), 주최측 공지 PDF(2026-11-03), 엔드포인트 실측(2026-11-08).
 
 ## 0. 목표와 마감
@@ -8,10 +8,10 @@
 - 이미 학습된 태양풍 속도 예측 모델을 **Benchlab 제출용 Docker 이미지**로 패키징한다.
 - 트랙: **Operational Podium (100% in-container)** — 상금($20k) 대상. 외부 연산 금지.
 - **코드 프리즈: 2026-11-19 23:59:59 UTC (= KST 11-20 08:59)**. 그 전에 실제 제출이 dry run을 통과해 `ELIGIBLE` 상태여야 함. 프리즈 뒤에는 이미지 고정(코드 수정·재학습·수동 개입 불가), 입력 데이터만 매 실행 새로 받음.
-- **현황 (2026-11-15)**: 수정본 **`bf45c55`가 `ELIGIBLE`**(재제출 dry run 11-11 16:18 UTC, pull 17초 + run 80초, §7). 현재 live에 들어갈 버전.
+- **현황 (2026-11-18)**: **두 모델 전환판(커밋 `add1761`, 팀원 모델 `8fb7432`)이 `ELIGIBLE`** — 사용자가 11-18 12:12 UTC 업로드, dry run t0 11-18 12:00: SUCCESS, pull 18초 + run 109초, 출력 24 KB(§7). 이 버전이 live에 들어감(마감 전 재업로드 안 하면 확정). 이전 ELIGIBLE은 `bf45c55`(단일 모델 C+HBC0.25).
 - **live 일정 (주최측 확정, §11)**: 첫 채점 예보 **t0 = 2026-11-20 00:00 UTC**, 마지막 **2027-02-11 18:00 UTC**(약 3개월). t0는 항상 00/06/12/18 정각. 리더보드 첫 순위는 시작 **3일 뒤**(benchlab.live, 로그인 불필요). 최종 순위는 2027-02-25 18:00 UTC 시점 ACE 월별 파일 기준.
-- **마감 시점의 마지막 업로드가 `ELIGIBLE`이어야 함**(이전 버전이 통과했어도 무효). 주최측 권장: **11-19 18:00 UTC(KST 11-20 03:00)까지 업로드**. 팀원 전원 참가 약관(Adobe Sign) 서명 필요.
-- 점수는 dry run에서 나오지 않음(자격 검사만). **공식 채점기 백테스트(2026-10-16~11-12, 112주기): 제출본 S_final 71.6 vs 공식 baseline 130–150, 우리 baseline 107 → 현재 제출본 유지**(§9).
+- **마감 시점의 마지막 업로드가 `ELIGIBLE`이어야 함**(이전 버전이 통과했어도 무효). 주최측 권장: **11-19 18:00 UTC(KST 11-20 03:00)까지 업로드**. 팀원 전원 참가 약관(Adobe Sign) 서명 필요 — 사용자: 신청 때 서명했다고 함(별도 최종본 메일 여부는 미확인, §9-3-1).
+- 점수는 dry run에서 나오지 않음(자격 검사만). **공식 채점기 백테스트(2026-10-16~11-12, 112주기, 같은 입력 재생): 전환판 S_final 68.34 / S4 단독 69.17 / 이전 제출본 71.65 vs 공식 baseline 130–150**(§9-3, §9-10).
 - 재제출하면 이전 ELIGIBLE 버전이 대체됨 → 새 버전이 실패하면 자격을 잃을 수 있음. 마감 직전 무리한 변경 금지.
 
 ## 1. 실행 계약 (플랫폼이 강제)
@@ -89,7 +89,12 @@
 
 ## 6. 모델 코드 (`wooseong-art/git_repo`, main, 2026-11-10 분석 / 2026-11-11 갱신)
 
-**현재 반영 커밋: `909af51`** (2026-11-11 23:58 KST, "1 시간 단위 속도 96 개 출력 추가 (KI = 4 horizon 최종값 보간, 새 가중치 없음)"). 이전 `5a7dffa`, `1333bb2`.
+**현재 반영 커밋: `8fb7432`** (2026-11-17, S-loss 재학습 `sloss/` 추가, `WEIGHTS_DEFAULT = "sloss"`). 우리 runner는 `weights="sloss"`와 `"original"`을 둘 다 실행(§7). `original`은 `909af51`과 같은 모델(백테스트 출력 차 ≤ 0.08 km/s). 이전 `909af51`, `5a7dffa`, `1333bb2`.
+
+**`8fb7432` S4 모델 (`loss_retrain_plan.md`대로 팀원이 재학습)**
+- G01-S(γ 1, w_cap 0.98) + RegimeNetCF 속도 항을 S loss로 교체 + Router valid-S checkpoint 재선택. 결합 **D(w_router 0.85) + BoxCox 보정 β 1.0**, fallback A β 0.25. 이름 `S4 D(w 0.85)+HBC1`.
+- 설정 `sloss/configs/deploy_selection.json`·`final_decision.json`(stage4 M1_single_w, valid ΔS −5.98, CI [−8.24, −3.69]), test ΔS −3.2. `sync_model.py`가 `deploy_selection.json`에 적힌 checkpoint를 추가 복사(가중치 .pt 45개, 69.8 MB, 두 세트 공존).
+- 특성(백테스트): TRMSE↓(94.8 → 86.0), RMSE↑(54.8 → 56.4), **bias +13**(slow wind 과대예측, 하강 추종 늦음). fallback G01-S는 bias +29(slow +44) — 백테스트·dry run에서 fallback 0회.
 
 **`909af51` 변경 내용** (추론 관련 변경 파일은 `fc_predict.py` 하나 → sync 반영, PASS)
 - 결과에 **`hourly_speed_kms` 96개** 추가: k번째 = ACE 1시간 평균 **[t0+k−1, t0+k)**, k = 1…96 (`hourly_window_start_utc`, `hourly_lead_h`, `hourly_model`, `hourly_ki_kms`).
@@ -146,7 +151,17 @@ fallback: 영상·PFSS 입력 하나라도 없으면 v = G01, 보정 boxcox_maps
 7. 베이스 이미지 Python 3.12-slim으로 맞추는 것 검토(개발 3.12.3).
 8. 실시간 ACE(RT) vs 학습(L2/K0) 차이 bias +2.4 km/s, G01 RMSE +0.7–1.2 (감수 가능).
 
-## 7. 현재 구현 (`submission_pack/`, 모델 + 72개 변환 + 컷오프 필터까지 완료 2026-11-12)
+## 7. 현재 구현 (`submission_pack/`, 모델 + 72개 변환 + 컷오프 필터 2026-11-12, 두 모델 전환 2026-11-18)
+
+**두 모델 전환 (2026-11-18, 커밋 `add1761`)**
+- `runner.py`: 영상 선다운로드 1회 → `FP.predict(..., weights="sloss")` → `weights="original"`(같은 캐시). 각 결과를 `to_hourly`로 72개. 첫 모델 끝나면 바로 저장(`_write`), 두 번째 끝나면 합친 결과로 덮어씀. 남은 시간 < `SYZYGY_SECOND_MODEL_MIN_S`(60초)면 두 번째 생략. `SYZYGY_COMBINE` = switch(기본) / sloss / original.
+- `hourly.combine()`: 시간 j마다 **`(orig[j] + sloss[j]) / 2 ≥ 450` → sloss[j], 아니면 orig[j]**. 한쪽만 있으면 그 모델 단독. 기준은 예측값만 사용(v_now 기준 전환은 72.3 이상으로 나쁨).
+- `model_stage.py`: 두 번째 모델 도중 timeout/비정상 종료여도 out 파일이 있으면 그 결과 사용(`stage_partial`).
+- 출력 `info.model`: `forecast`, `combine`(rule, hours_sloss/original), `result`(sloss), `result_original`, `forecast_sloss`, `forecast_original`. 크기 약 24 KB.
+- fallback 순서: 전환 → 단일 가중치 세트 → 각 세트 G01 fallback → baseline → 기후값. 제출 README 갱신.
+- 검증: 로컬 백테스트 4주기 두 모델 출력이 이전 runs와 ≤ 0.08 km/s, 결합 결과 = 시뮬레이션. 장애(`--network none` → baseline, 예산 2초 → 기후값, 두 번째 생략 → sloss 단독, 두 번째 도중 kill → `stage_partial` sloss) 모두 exit 0 + 72개. `test_local.sh`(t0 11-18 06:00) PASS 317초(한국 JSOC 파일당 12초, 다운로드 258초 / 계산 43초). 이미지 2.16 GB.
+- **실제 dry run (11-18 12:00 UTC)**: SUCCESS, pull 18 + run 109초, 선다운로드 13.5초(영상 22/22, PFSS 101/102), sloss 38초 + original 28초, 둘 다 OK, 느린 바람이라 72시간 모두 original, 503 14건 모두 복구, 접속 jsoc1·sohoftp.
+
 
 ```
 run.sh <t0>  →  python3 /app/predict.py "$T0" "$OUT" || true; /app/emergency.sh "$T0" "$OUT"  →  upload.sh
@@ -242,12 +257,12 @@ predict.py
    - lead별 S(제출본 vs 공식 persistence): 1h 22.9 vs 22.2, 6h 42.4 vs 37.9, 12h 56.5 vs 68.2, 24h 71.1 vs 107.8, 48h 85.4 vs 181.1, 72h 86.6 vs 215.7. 앞쪽 6시간은 persistence(공식판은 t0 시각 행까지 봄)와 비슷하거나 조금 뒤지고, 12h부터 크게 앞섬. 미래 정보 누수 징후 없음.
    - 한계: 28일·112주기로 짧음(TRMSE는 빠른 흐름 몇 번에 크게 움직임). 4–5일 이전 t0는 HMI NRT가 삭제돼 확정본 + LAG 규칙 사용(live보다 조금 오래된 영상). 실행 중 JSOC 503은 주기당 0–18건, 모두 복구.
    - 보관: `Syzygy/backtest/` — `bt_driver.py`(이어서 실행 가능), `bt_eval.py`, `runs/<t0>.json`(주기별 컨테이너 출력), `forecasts/*.json`(채점기 입력), `report_20261016_20261112.json`. 채점기는 `Trillium-Technologies/benchlab-starter-kit`의 `scoring_demo/`(scratchpad에 클론, `bt_eval.py`의 경로 수정 필요).
-3-1. [ ] **참가 약관 서명**: 팀 리더 메일로 Adobe Sign 안내가 왔는지 확인, 팀원 전원 서명(미서명 시 제출 취소 가능).
+3-1. [~] **참가 약관 서명**: 사용자 — 신청 때 서명함. 주최측 시트는 "Adobe Sign 안내를 팀 리더에게 보낼 예정"이라 별도 최종본일 수 있음 → Adobe Sign "Completed" 메일 확인 또는 Slack 문의 권장.
 4. [ ] §10 결정 대기 항목 반영 후 필요 시 최종 재제출 (라벨 규칙, baseline 혼합 여부, PFSS 부분 다운로드, 자원 선언)
 5. [ ] 모델 코드가 또 바뀌면: `python tools/sync_model.py <git_repo>` → 변경 파일 확인 → 재빌드 → `test_local.sh` → `submit_real.py check`
 6. [ ] `ELIGIBLE` 확정 버전의 ZIP 보관 (`submission_real.zip`은 실행할 때마다 덮어씀. 기존 `submission_B/C.zip`·`kit.zip`은 사용자가 삭제함 — 제출 버전은 git 커밋으로 재현 가능)
 7. [ ] **live 기간 운영** (11-20 ~ 2027-02): 포털은 실행 상태만(`submit_real.py status`), 점수는 benchlab.live(첫 순위 11-23경, 72h 관측이 모여야 채점). 로그 링크는 1시간 유효·최근 실행만 보이므로 `submit_real.py logs`로 주기적으로 받아 둘 것(대회 뒤 오차 분석 자료). 자동 저장 스크립트는 제안만 함(미작성).
-8. [ ] **대회 뒤 개선 실험 — 팀원에게 전달할 문서 `loss_retrain_plan.md`** (2026-11-16 작성·보완 완료, 팀원에게 그대로 전달 가능, git 미추가). **이번 제출본은 변경하지 않음**(D안은 9번에서 별도 결정).
+8. [x] **S loss 재학습 문서 `loss_retrain_plan.md`** → 팀원이 이대로 재학습해 `8fb7432`(S4)로 반영됨(10번). 아래는 문서 내용 기록.
    - 근거: 백테스트에서 TRMSE(94.8)가 RMSE(54.8)보다 훨씬 큼 → 빠른 바람 오차가 점수를 지배. 현재 학습·선택은 RMSE 중심(§6).
    - 내용: 구조·입력·출력(4개 + KI)은 그대로, **loss와 선택 기준만 S로**. TIMSE = train 고정 분위수로 만든 샘플 가중치 w(v)의 가중 MSE와 같음(공식 `timse_percentile`과 일치 확인). `AdaptiveSLoss`: horizon별 계수 a_τ = S_τ/(4·MSE_τ), b_τ = S_τ/(4·TMSE_τ)를 EMA 통계로 매 step 계산(no_grad) → α_τ = MSE/(MSE+TMSE) 자동(현재 수준 ≈ 0.25). α를 `nn.Parameter`로 학습하면 α → 0으로 무너지므로 금지. 남는 탐색 변수 gamma {0.5,1,2} × w_cap {0.98,0.99,0.995}(seed 42로 9회 → 최적 조합 seed 5개), 고정 α 0.25 비교 1회.
    - 단계: 0 재학습 없이 결합 비율·보정 강도를 validation S로 재선택 → 1 G01(CPU) → 2 RegimeNetCF(GPU) → 3 Router checkpoint 재선택 → 4 BoxCox 재적합·최종 재선택. 모든 선택은 대회 형식(KI → `hourly[1:73]`, 1h 정답)의 validation S.
@@ -255,10 +270,12 @@ predict.py
    - H96(1h 직접 출력)은 RMSE 기준 KI와 동률이라 이번 실험에서 제외. S loss에서 효과가 보이면 그때 비교.
    - **결합 비율(문서 4.5절, 2026-11-16 추가)**: G01 + Router 비율도 S로 재선택. 순서 ① 단일 w(0–1, 0.05 간격, 보정 강도 {0, 0.25, 0.5, 1}과 동시 탐색) → ② horizon별 w_h 4개 → ③ 입력 의존 gate `w(x) = sigmoid(a_h + b·p_occ + c·P_HSS(Router) + d·(v_now−430)/100)`를 train OOF에 `AdaptiveSLoss`로 적합(선택). 결합 비율은 backprop 학습이 아니라 예측 위에서 탐색 — 0단계(지금 예측)와 4단계(재학습 후) 두 번. 구현 위치: 기존 D 탐색 `fc_analysis.py`, RegimeNetCF loss는 `code/05_train.py` `regime_loss` 807행 `loss_v`. Router OOF는 seed 42–44만.
    - 문서 코드 3블록(가중치 표, `AdaptiveSLoss`, gate) 모두 Docker에서 문서 그대로 실행 확인. gate는 w = 0.5에서 출발해 p_occ > 0.5일 때 0.77, < 0.2일 때 0.39로 학습(합성 자료).
-9. [ ] **결합 비율 D안 반영 여부 (결정 대기, 마감 11-19 걸림)**
-   - 팀원 코드에 base 4종: A = G01, B = Router, **C = 0.5·G01 + 0.5·Router(현재)**, **D = (1−w)·G01 + w·Router, w = 0.75**(train OOF RMSE 최소, `final_selection.json`의 `"w": 0.75`). D는 RMSE 63.46 < C 64.10이었지만 제약(Slow RMSE ≤ G01 + 2, V1 FAR ≤ G01 + 0.05) 미충족으로 C 선택(`log.step1`). **`final_selection.json`의 `"base": "C"` → `"D"`로 바꾸면 재학습 없이 동작**(`fc_predict.py` 504행).
-   - 백테스트(112주기, 공식 채점기, 결합 비율만 바꾸고 보정량은 실행값 고정한 근사, w = 0.5가 제출본을 0.013 km/s 안으로 재현): w_router 0.0 / 0.3 / **0.5** / 0.7 / 0.8 / 0.9 / 1.0 → S 77.32 / 73.40 / **71.63** / 70.57 / 70.31 / **70.23** / 70.33. Router 비중↑ → TRMSE 꾸준히↓(94.8 → 88.3), RMSE는 0.7까지 비슷하다 이후↑, bias +4.8 → +8.2. 보관: `backtest/bt_blend.py`(채점기 경로는 scratchpad 기준, `bt_eval.py`처럼 수정 필요), `backtest/report_blend_20261016_20261112.json`.
-   - 판단: 근거가 28일뿐 + 팀원이 제약으로 뺀 이유 미확인 → **팀원에게 D 탈락 사유 확인 후 결정**. 반영 시 작업: 설정 한 줄(팀원 레포 커밋 → sync 또는 runner 패치) → 재빌드 → `test_local.sh` → 재제출(사용자가 실행). 미결정이면 현재 C 유지.
+9. [x] ~~결합 비율 D안 반영 여부~~ → 팀원이 S loss 재학습(`8fb7432`)에서 D(w 0.85)를 채택해 해소. 이전 C/D 비교(w_router 0.5 → 0.9: S 71.63 → 70.23)는 `backtest/bt_blend.py`, `report_blend_20261016_20261112.json`.
+10. [x] **S4 반영 + 두 모델 전환 → 업로드 → `ELIGIBLE`** (2026-11-18)
+   - S4 vs 이전 제출본(같은 112주기, 같은 입력 재생 = `bt_runner_cached.py` 디스크 캐시): S_final 69.17 vs 71.65, 2일 블록 bootstrap CI [−6.60, +7.80](S4 우세 66%). 관측 속도별(시간별 72개): <400 bias +33 → +39(+9.0% → +10.6%), 500–700 bias −3~−12 → +21~+23, **≥700 bias −124 → −102, RMSE 142 → 123, TIMSE 기여 8493 → 6186** → 이득은 고속류(표본 6%, TIMSE 83%)에서 나옴. +200 급상승 32건(사건 2개: 10-30, 11-04~07)은 지속 예보 RMSE 334 vs 이전 155 / S4 147.
+   - 전환 시뮬레이션: 예측 평균 기준 450 = 68.35(400 69.04, 500 68.67, 550 69.36), 0.5:0.5 평균 69.57, v_now 기준 72.3 이상. 반으로 나눠 경계 선택 → 둘 다 450, 둘 다 S4 단독보다 좋음(75.07 vs 75.43, 47.86 vs 49.76).
+   - **실제 이미지 백테스트: 68.34** (RMSE 54.95 / TRMSE 86.06 / bias +11.0 / S_49:72 79.34), lead 1/6/12/24/48/72h S = 22.1/41.6/55.8/71.5/82.5/83.9. 전환 − S4 −0.82 CI [−2.10, +0.36](90%), 전환 − 이전 −3.31 CI [−6.70, +7.29](76%). 주기당 sloss 사용 평균 25.5시간(0–72). 450은 같은 기간에서 고른 값이라 live 이득은 조금 작을 수 있음.
+   - 보관: `backtest/runs_old/`, `runs_s4/`, `runs_switch/`, `bt_eval_s4.py`(공식 채점 + 상황별 + bootstrap), `report_s4_20261016_20261112.json`(세 모델). scratchpad 스크립트 `bin_contrib.py`(속도 구간 기여), `switch_sim.py`(전환 시뮬레이션)는 휘발성.
 
 ## 10. 미확정 / 확인 필요
 
@@ -266,7 +283,8 @@ predict.py
 - ~~72개 변환 규칙~~ → 팀원 `909af51` KI 규칙으로 해결 (2026-11-12 반영).
 - ~~시간 라벨~~ → `LABEL_SHIFT_H = 1` 유지. 공식 채점기가 `obs[t0, τ] = v(t0 + τ)`(§4). Slack 시트의 같은 질문(#18, #19 Part 3)은 아직 미답변이라 답이 다르게 나오면 재검토.
 - 팀원에게 추가 요청: ① 11-04 12:00 live 실행의 `features/live_images/*.npy`·`hmi_index.csv`·`forecast_20261104T1200_live.json`·`reports/live_input_check.json`·`inference_check.json` (컨테이너 결과 비트 대조용) ② **archive 예측**(과거 t0별 g01·router 16 bin·final·v_now, 변환 규칙 백테스트용) ③ ~~시간별 72개 변환 규칙~~(해결) ④ 추가 수정 예정분(H96 채택 여부 포함 — 채택 시 코드·가중치 필요) ⑤ (선택) Router **R0** 가중치 — 로컬 실측상 PFSS 시간 문제 작아 우선순위 낮음.
-- **결합 비율 D안(Router 0.75)을 이번 제출에 반영할지** — 팀원에게 D 탈락 사유(어느 제약을 얼마나 넘었는지) 확인 필요(§9-9).
+- ~~결합 비율 D안~~ → S4(D w 0.85) + 두 모델 전환으로 반영(§9-10).
+- 마감(11-19 23:59 UTC) 전 추가 변경 계획 없음. 재업로드 시 새 dry run을 다시 통과해야 함.
 - 사용자 결정 대기: ① Python **3.12-slim** 사용 확인 (§2 템플릿은 3.11, 팀원 개발 3.12.3) ② PFSS용 HMI 부분 다운로드 시 그대로 계산(현재) vs 일정 비율 미만이면 G01 fallback ③ 자원 4 vCPU / 16 GB 유지(권장, 실측 최대 1.08 GB) vs 축소.
 - ~~live 시작일·t0 격자~~ → 확정(§0, §11). 품질 플래그는 status 0만 채점(잠정, 시작 전 확정 공지 예정).
 - 주최측 미답변(시트 Open): SEP 오염 S=0 시간의 사후 보정 여부(#31), 플랫폼 장애 시 점수 처리(D #1), 리더보드 세부 표시(#29), ACE 결측 시 IMAP/SOLAR-1 대체(#28).
